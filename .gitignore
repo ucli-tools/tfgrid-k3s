@@ -19,6 +19,7 @@ state.json
 # Ansible
 *.retry
 ansible_collections/
+inventory.ini
 
 # Python
 __pycache__/
@@ -61,6 +62,7 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+k3s.yaml
 
 # Env File
 credentials.auto.tfvars
