@@ -1,0 +1,28 @@
+---
+# Tasks for setting up kubectl configuration for local management
+
+- name: Fetch kubeconfig from primary control plane node
+  fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ playbook_dir }}/../k3s.yaml"
+    flat: yes
+  delegate_to: "{{ hostvars[primary_control_node]['ansible_host'] }}"
+  
+- name: Set server URL in kubeconfig (for direct access)
+  local_action:
+    module: replace
+    path: "{{ playbook_dir }}/../k3s.yaml"
+    regexp: 'https://127.0.0.1:6443'
+    replace: "https://{{ hostvars[primary_control_node]['ansible_host'] }}:6443"
+  become: no
+  
+- name: Display kubeconfig instructions
+  debug:
+    msg:
+      - "K3s kubeconfig has been saved to {{ playbook_dir }}/../k3s.yaml"
+      - "To use this configuration, run:"
+      - "export KUBECONFIG={{ playbook_dir }}/../k3s.yaml"
+      - "kubectl get nodes  # To verify connectivity"
+      - "You can also copy it to your ~/.kube directory:"
+      - "mkdir -p ~/.kube/k3s && cp {{ playbook_dir }}/../k3s.yaml ~/.kube/k3s/config"
+      - "Then use: export KUBECONFIG=~/.kube/k3s/config"
