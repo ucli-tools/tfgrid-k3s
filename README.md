@@ -67,9 +67,8 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
 ```
 tfgrid_k3s/
 ├── infrastructure/    # Infrastructure provisioning (via OpenTofu)
-│   ├── .env.example   # Template for environment variables (for sensitive data)
-│   ├── credentials.auto.tfvars.example  # Example configuration variables
-│   └── main.tf        # Main infrastructure definition
+│   ├── credentials.auto.tfvars.example  # Example configuration variables (non-sensitive)
+│   └── main.tf        # Main infrastructure definition with secure variable handling
 ├── platform/          # Platform configuration and K3s deployment (via Ansible)
 │   ├── roles/         # Configuration components
 │   │   ├── common/    # Common configuration for all nodes
@@ -78,9 +77,15 @@ tfgrid_k3s/
 │   │   └── kubeconfig/# Local kubectl configuration
 │   └── site.yml       # Main deployment playbook
 ├── scripts/           # Deployment and utility scripts
-│   ├── deploy.sh      # Main deployment script
+│   ├── cleantf.sh     # Script to clean Terraform/OpenTofu state and files
+│   ├── configure-dns.sh # DNS configuration utility
+│   ├── deploy.sh      # Main deployment script with security checks
+│   ├── generate-inventory.sh # Generate Ansible inventory from deployment
+│   ├── ping.sh        # Connectivity test utility
 │   └── wg.sh          # WireGuard setup script
 └── docs/              # Additional documentation
+    ├── security.md    # Security best practices documentation
+    └── troubleshooting.md # Solutions to common issues
 ```
 
 ## Configuration
