@@ -11,6 +11,20 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TF_CONFIG_DIR_DEPLOYMENT="${REPO_ROOT}/infrastructure"  # Absolute path to infrastructure directory
 TF_CONFIG_DIR_KUBERNETES="${REPO_ROOT}/platform"  # Absolute path to platform directory
 
+# Check for sensitive environment variables
+if env | grep -q TF_VAR_mnemonic; then
+  # Variable is already set using the secure terminal approach
+  echo "Found TF_VAR_mnemonic in environment (good)."
+else
+  echo "⚠️ WARNING: TF_VAR_mnemonic not found in environment variables!"
+  echo "Please set it securely using:"
+  echo "set +o history"
+  echo "export TF_VAR_mnemonic=\"your_mnemonic_phrase\""
+  echo "set -o history"
+  echo "\nSee docs/security.md for more information on secure credential handling."
+  exit 1
+fi
+
 # Configuration managed through OpenTofu and Ansible
 
 # --- Cleanup (if needed) ---

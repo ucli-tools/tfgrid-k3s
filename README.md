@@ -34,14 +34,26 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
 
 2. Configure your deployment:
    ```bash
-   # Set up Terraform/OpenTofu configuration
-   cp infrastructure/terraform.tfvars.example infrastructure/terraform.tfvars
-   nano infrastructure/terraform.tfvars
+   # Set up Terraform/OpenTofu configuration for non-sensitive settings
+   cp infrastructure/credentials.auto.tfvars.example infrastructure/credentials.auto.tfvars
+   nano infrastructure/credentials.auto.tfvars
+
+   # MAXIMUM SECURITY: Set up your ThreeFold mnemonic securely (prevents shell history recording)
+   set +o history
+   export TF_VAR_mnemonic="your_actual_mnemonic_phrase"
+   set -o history
    ```
+   
+   See `docs/security.md` for more details on secure credential handling.
 
 3. Deploy with a single command:
    ```
    bash ./scripts/deploy.sh
+   ```
+
+4. After deployment, for security, unset the sensitive environment variable:
+   ```bash
+   unset TF_VAR_mnemonic
    ```
 
    This will:
@@ -55,6 +67,9 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
 ```
 tfgrid_k3s/
 ├── infrastructure/    # Infrastructure provisioning (via OpenTofu)
+│   ├── .env.example   # Template for environment variables (for sensitive data)
+│   ├── credentials.auto.tfvars.example  # Example configuration variables
+│   └── main.tf        # Main infrastructure definition
 ├── platform/          # Platform configuration and K3s deployment (via Ansible)
 │   ├── roles/         # Configuration components
 │   │   ├── common/    # Common configuration for all nodes
@@ -72,7 +87,7 @@ tfgrid_k3s/
 
 ### Advanced Configuration
 
-The configuration file (`terraform.tfvars`) contains comments explaining each setting. You can customize:
+The configuration files contain comments explaining each setting. You can customize:
 
 - **Infrastructure**: Number of nodes, instance types, region, etc.
 - **Kubernetes**: Number of control and worker nodes

@@ -7,7 +7,11 @@ terraform {
 }
 
 # Variables
-variable "mnemonic" { type = string }
+variable "mnemonic" {
+  type = string
+  sensitive = true
+  description = "ThreeFold mnemonic for authentication"
+}
 variable "SSH_KEY" { type = string }
 variable "control_nodes" { type = list(number) }  # e.g. [6905, 6906, 6907]
 variable "worker_nodes" { type = list(number) }   # e.g. [6910, 6911, 6912]

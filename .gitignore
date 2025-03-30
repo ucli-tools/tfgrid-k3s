@@ -66,3 +66,4 @@ k3s.yaml
 
 # Env File
 credentials.auto.tfvars
+.env

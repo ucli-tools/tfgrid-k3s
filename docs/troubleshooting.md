@@ -15,11 +15,44 @@ This guide addresses common issues that might occur during the deployment of K3s
 1. Verify your mnemonics are correct
 2. Check if you have enough TFT balance for the deployment
 3. Ensure you're using the correct network (main, test, dev)
+4. If using environment variables, verify they are set correctly
 
 ```bash
+# Verify environment variables are set
+echo $TF_VAR_mnemonic | grep -o '.' | wc -l  # Should show the length but not reveal the mnemonic
+
 # Verify you can connect using the same credentials
 tofu -chdir=deployment init
 ```
+
+#### Environment Variable Issues
+
+**Symptoms:**
+- "Variable not declared" errors related to mnemonic
+- Authentication failures with ThreeFold Grid
+
+**Solutions:**
+1. Use the secure shell history protection method:
+   ```bash
+   # This prevents your mnemonic from being stored in shell history
+   set +o history
+   export TF_VAR_mnemonic="your_mnemonic_phrase"
+   set -o history
+   ```
+
+2. Verify the variable is set properly:
+   ```bash
+   # Check if the variable exists (won't show the actual value)
+   env | grep -o TF_VAR_mnemonic
+   ```
+
+3. If you need to unset the variable when done:
+   ```bash
+   # Clear the sensitive variable from memory
+   unset TF_VAR_mnemonic
+   ```
+
+4. For more details on secure credential handling, see `docs/security.md`
 
 #### Error: No capacity found on nodes
 
