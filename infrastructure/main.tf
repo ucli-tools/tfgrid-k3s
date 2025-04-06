@@ -12,7 +12,11 @@ variable "mnemonic" {
   sensitive = true
   description = "ThreeFold mnemonic for authentication"
 }
-variable "SSH_KEY" { type = string }
+variable "SSH_KEY" { 
+  type = string
+  default = null
+  description = "SSH public key content (if null, will use ~/.ssh/id_ed25519.pub)"
+}
 variable "control_nodes" { type = list(number) }  # e.g. [6905, 6906, 6907]
 variable "worker_nodes" { type = list(number) }   # e.g. [6910, 6911, 6912]
 variable "control_cpu" { type = number }
@@ -81,7 +85,11 @@ resource "grid_deployment" "k3s_nodes" {
     mycelium_ip_seed = random_bytes.k3s_ip_seed[tostring(each.value.node_id)].hex  # Convert to string
 
     env_vars = {
-      SSH_KEY = var.SSH_KEY
+      SSH_KEY = var.SSH_KEY != null ? var.SSH_KEY : (
+        fileexists(pathexpand("~/.ssh/id_ed25519.pub")) ? 
+          file(pathexpand("~/.ssh/id_ed25519.pub")) : 
+          file(pathexpand("~/.ssh/id_rsa.pub"))
+      )
     }
 
     mounts {

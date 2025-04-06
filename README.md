@@ -46,10 +46,27 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
    
    See `docs/security.md` for more details on secure credential handling.
 
-3. Deploy with a single command:
+   > **SSH Key Auto-Detection**: The system will automatically use your SSH keys for deployment without requiring manual configuration. It first checks for `~/.ssh/id_ed25519.pub`, then falls back to `~/.ssh/id_rsa.pub` if needed. You can also manually specify your SSH key in the `credentials.auto.tfvars` file if desired.
+
+3. Deploy the cluster:
+
+   **Option A**: Using Make (recommended)
+   ```bash
+   # Simply run make from the repository root
+   make
    ```
-   bash ./scripts/deploy.sh
+
+   **Option B**: Directly using the script
+   ```bash
+   # Important: The script must be run from within the scripts directory
+   cd scripts
+   bash deploy.sh
+   
+   # Do NOT run it this way (will fail due to relative paths in the script):
+   # bash scripts/deploy.sh
    ```
+   
+   > **Tip**: Run `make help` to see all available make commands
 
 4. After deployment, for security, unset the sensitive environment variable:
    ```bash
