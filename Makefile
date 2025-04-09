@@ -27,7 +27,7 @@ ping:
 permissions:
 	@echo "Checking cluster permissions..."
 	@chmod +x scripts/cluster_permissions.sh
-	@./scripts/cluster_permissions.sh
+	@KUBECONFIG=$(CURDIR)/k3s.yaml ./scripts/cluster_permissions.sh
 
 # Help information
 help:

@@ -132,6 +132,15 @@ export KUBECONFIG=$(pwd)/k3s.yaml
 kubectl get nodes
 ```
 
+You can also verify your access to the cluster and check permissions using:
+
+```bash
+# Verifies your local machine can access the cluster and shows permissions details
+make permissions
+```
+
+This command automatically sets the KUBECONFIG environment variable to the generated k3s.yaml file.
+
 #### Deploying Applications
 
 You can now deploy applications to your K3s cluster using standard Kubernetes methods:
