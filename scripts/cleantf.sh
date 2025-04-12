@@ -15,6 +15,7 @@ TO_REMOVE=(
   "terraform.tfstate.backup"
   "*.tfstate.*"
   "crash.log"
+  "state.json"
 )
 
 # Change to deployment directory
