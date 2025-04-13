@@ -73,7 +73,7 @@ resource "random_bytes" "mgmt_ip_seed" {
 
 # Mycelium overlay network
 resource "grid_network" "k3s_network" {
-  name          = "k3s_cluster_network"
+  name          = "k3s_cluster_network3"
   nodes         = local.all_nodes
   ip_range      = "10.1.0.0/16"
   add_wg_access = true

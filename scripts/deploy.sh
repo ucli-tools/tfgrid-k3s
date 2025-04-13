@@ -55,15 +55,13 @@ bash "${SCRIPT_DIR}/generate-inventory.sh"
 # --- Initial Connectivity Test ---
 cd "$TF_CONFIG_DIR_KUBERNETES" || exit 1  # Ensure we're in the correct directory
 
-# Get management node IP from Terraform output
-MANAGEMENT_IP=$(tofu -chdir="$TF_CONFIG_DIR_DEPLOYMENT" output -raw management_node_ip)
+# Get management node WireGuard IP from Terraform output
+MANAGEMENT_IP=$(tofu -chdir="$TF_CONFIG_DIR_DEPLOYMENT" output -raw management_node_wireguard_ip)
 
 if [ -z "$MANAGEMENT_IP" ]; then
     echo "Error: Could not retrieve management node IP."
     exit 1
 fi
-
-echo "Management node public IP: $MANAGEMENT_IP"
 
 # Robust Ansible Ping with Retry
 MAX_RETRIES=5

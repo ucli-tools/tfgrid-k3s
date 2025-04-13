@@ -48,7 +48,7 @@ echo "[management]" >> "$OUTPUT_FILE"
 
 # Generate management node
 tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
-  .values.outputs.management_node_ip.value |
+  .values.outputs.management_node_wireguard_ip.value |
   "management ansible_host=\(.) ansible_user=root"
 ' >> "$OUTPUT_FILE"
 
