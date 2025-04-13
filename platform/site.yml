@@ -1,6 +1,13 @@
 ---
+- name: Configure Management Node
+  hosts: management
+  become: yes
+  roles:
+    - role: management
+      tags: [management]
+
 - name: Configure Common
-  hosts: all
+  hosts: all:!management
   become: yes
   roles:
     - role: common
@@ -21,13 +28,10 @@
       tags: [worker]
 
 - name: Setup local kubeconfig for K3s cluster
-  hosts: localhost
-  connection: local
+  hosts: management
   become: no
   roles:
     - role: kubeconfig
       tags: [kubeconfig]
   vars:
     primary_control_node: "{{ hostvars['node1']['inventory_hostname'] }}"
-
-# K3s deployment complete

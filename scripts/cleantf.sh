@@ -21,6 +21,8 @@ TO_REMOVE=(
 # Change to deployment directory
 cd "$DEPLOYMENT_DIR" || exit 1
 
+tofu destroy -auto-approve >/dev/null 2>&1 || true
+
 # Remove files and directories
 for item in "${TO_REMOVE[@]}"; do
   find . -name "$item" -exec rm -rf {} \; 2>/dev/null || true

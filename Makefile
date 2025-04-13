@@ -3,6 +3,10 @@
 # Default target
 all: deploy
 
+# Connect to management node
+connect-management:
+	cd scripts && bash connect-management.sh
+
 # Primary target to deploy the K3s cluster
 deploy:
 	cd scripts && bash deploy.sh
