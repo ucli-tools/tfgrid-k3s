@@ -120,13 +120,6 @@ sleep 60
 echo "Setting up kubectl configuration on management node..."
 ssh -o StrictHostKeyChecking=no root@$MANAGEMENT_IP "cd ~/tfgrid-k3s/platform && ansible-playbook site.yml -t kubeconfig"
 
-# Configure a default domain for testing
-DOMAIN_NAME="k3s.example.com"
-
-# Configure DNS
-echo "=== Setting up DNS information ==="
-bash "${SCRIPT_DIR}/configure-dns.sh" "${DOMAIN_NAME}"
-
 echo "=== Deployment Completed Successfully! ==="
 echo ""
 echo "Your K3s cluster is now managed by the management node at: $MANAGEMENT_IP"

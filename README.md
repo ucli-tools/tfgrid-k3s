@@ -11,8 +11,9 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
 - **Dedicated Management Node**: A VM on ThreeFold Grid for managing your cluster
 - **Infrastructure as Code**: Provisions all necessary infrastructure using Terraform/OpenTofu
 - **Lightweight Kubernetes**: Uses K3s instead of full Kubernetes
-- **Fully Automated**: Single command deployment with `deploy.sh`
+- **Fully Automated**: Single command deployment with `make`
 - **WireGuard Integration**: Secure network connectivity between nodes
+- **Mycelium Integration**: IPv6 overlay network installed on all nodes
 - **High Availability**: Support for HA cluster deployment
 - **Scalable**: Support for multiple worker nodes
 - **Ready for Apps**: Pre-configured for deploying your applications
