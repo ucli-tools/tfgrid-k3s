@@ -59,8 +59,6 @@ The management node lives within the same private network as your cluster nodes,
 
    See `docs/security.md` for more details on secure credential handling.
 
-   > **Important**: Make sure to add the `management_node` parameter to your configuration file with a valid node ID from ThreeFold Grid.
-
    > **SSH Key Auto-Detection**: The system will automatically use your SSH keys for deployment without requiring manual configuration. It first checks for `~/.ssh/id_ed25519.pub`, then falls back to `~/.ssh/id_rsa.pub` if needed. You can also manually specify your SSH key in the `credentials.auto.tfvars` file if desired.
 
 3. Deploy the cluster:
