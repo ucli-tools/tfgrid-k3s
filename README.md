@@ -177,6 +177,14 @@ tfgrid_k3s/
 In your `credentials.auto.tfvars` file, you can configure:
 
 ```
+# Management node specifications (defaults if not specified)
+# management_cpu = 1      # 1 vCPU
+# management_mem = 2048   # 2GB RAM
+# management_disk = 25    # 25GB storage
+
+# Optional: Set to false to deploy worker nodes without public IPv4 addresses
+# worker_public_ipv4 = true  # Default is true
+
 # Node IDs from ThreeFold Grid
 control_nodes = [1000, 1001, 1002]  # Control plane node IDs
 worker_nodes = [2000, 2001, 2002]   # Worker node IDs
@@ -191,11 +199,6 @@ control_disk = 100   # 100GB storage
 worker_cpu = 8
 worker_mem = 16384   # 16GB RAM
 worker_disk = 250    # 250GB storage
-
-# Management node specifications (defaults if not specified)
-# management_cpu = 1      # 1 vCPU
-# management_mem = 2048   # 2GB RAM
-# management_disk = 25    # 25GB storage
 ```
 
 ### Advanced Configuration
@@ -205,6 +208,7 @@ The configuration files contain comments explaining each setting. You can custom
 - **Infrastructure**: Number of nodes, instance types, region, etc.
 - **Kubernetes**: Number of control and worker nodes
 - **Management Node**: CPU, memory, and storage allocation
+- **IPv4 Configuration**: Control whether worker nodes get public IPv4 addresses
 
 Refer to the example files for all available configuration options.
 

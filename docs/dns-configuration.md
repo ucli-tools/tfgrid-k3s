@@ -2,6 +2,14 @@
 
 This guide explains how to configure DNS for applications running on your K3s cluster. Unlike the infrastructure deployment, DNS configuration is application-specific and should be done after your cluster is running.
 
+## Special Considerations for Private Workers
+
+If you've configured your cluster with `worker_public_ipv4 = false`, your worker nodes won't have public IPv4 addresses. For application ingress in this case:
+
+1. Use a node with a public IP (such as the management node) as your edge node
+2. Configure appropriate internal routing to your applications
+3. Consider using a cloud load balancer or similar service
+
 ## Getting Your Cluster's IP Address
 
 Before configuring DNS, you need to determine the appropriate IP address:

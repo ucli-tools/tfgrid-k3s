@@ -26,6 +26,12 @@ variable "worker_cpu" { type = number }
 variable "worker_mem" { type = number }
 variable "worker_disk" { type = number }
 
+variable "worker_public_ipv4" {
+  type        = bool
+  default     = true
+  description = "Whether worker nodes should get public IPv4 addresses"
+}
+
 # Management node variables
 variable "management_node" { type = number } # Single node ID for management
 variable "management_cpu" {
@@ -111,7 +117,7 @@ resource "grid_deployment" "k3s_nodes" {
     cpu              = each.value.is_control ? var.control_cpu : var.worker_cpu
     memory           = each.value.is_control ? var.control_mem : var.worker_mem
     entrypoint       = "/sbin/zinit init"
-    publicip         = !each.value.is_control                                     # Workers get public IPs
+    publicip         = !each.value.is_control && var.worker_public_ipv4
     mycelium_ip_seed = random_bytes.k3s_ip_seed[tostring(each.value.node_id)].hex # Convert to string
 
     env_vars = {
