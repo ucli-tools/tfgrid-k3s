@@ -115,10 +115,13 @@ The management node is your central location for all cluster operations. After d
 
 ```bash
 # Connect to the management node
-make connect-management
+make connect
 
 # Or directly:
 ssh root@<management-node-ip>
+
+# Connect to the management node and launch K9s TUI directly
+make k9s
 ```
 
 ### Managing Your Cluster from the Management Node
@@ -135,6 +138,9 @@ kubectl get pods -A
 # Run Helm commands
 helm list -A
 
+# Launch K9s Terminal UI for Kubernetes
+k9s
+
 # Update cluster configuration
 cd ~/tfgrid-k3s/platform
 ansible-playbook site.yml
@@ -142,6 +148,7 @@ ansible-playbook site.yml
 
 The management node has all necessary tools pre-installed:
 - kubectl
+- K9s
 - Ansible
 - Helm
 - OpenTofu
@@ -186,6 +193,7 @@ tfgrid_k3s/
 └── docs/              # Additional documentation
     ├── security.md    # Security best practices documentation
     └── troubleshooting.md # Solutions to common issues
+    └── k9s.md         # K9s documentation
 ```
 
 ## Infrastructure Configuration
