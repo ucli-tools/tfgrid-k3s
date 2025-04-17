@@ -137,25 +137,162 @@
     replace: 'https://{{ hostvars[primary_control_node | default("node1")]["ansible_host"] }}:6443'
   when: kubeconfig_copied is defined and kubeconfig_copied.changed
 
-- name: Set up kubectl configuration in shell profile
-  blockinfile:
-    path: "/root/.bashrc"
-    marker: "# {mark} KUBERNETES CONFIGURATION"
-    block: |
-      # Set up kubectl to work without manual configuration
-      export KUBECONFIG=/root/.kube/config
-      alias k=kubectl
+- name: Debug and fix kubeconfig
+  block:
+    - name: Check kubeconfig content
+      shell: cat ~/.kube/config
+      register: kubeconfig_content
+      changed_when: false
+      ignore_errors: true
 
-      # Display cluster info on login (comment out if not desired)
-      if [ -f /root/.kube/config ]; then
-        echo "Kubernetes cluster information:"
-        kubectl cluster-info 2>/dev/null || echo "Cluster not accessible yet"
-        echo "Use 'kubectl get nodes' to see cluster nodes"
-      fi
-    create: yes
+    - name: Show kubeconfig server value
+      debug:
+        msg: "Current kubeconfig server value: {{ kubeconfig_content.stdout | regex_search('server: (.+)', '\\1') | first | default('not found') }}"
+      when: kubeconfig_content.rc is defined and kubeconfig_content.rc == 0
+
+    - name: Get control node IP
+      debug:
+        msg: "Control node IP should be: {{ hostvars[primary_control_node | default('node1')]['ansible_host'] }}"
+
+    - name: Update kubeconfig server address again
+      replace:
+        path: ~/.kube/config
+        regexp: "server: https://127.0.0.1:6443"
+        replace: 'server: https://{{ hostvars[primary_control_node | default("node1")]["ansible_host"] }}:6443'
+      register: kubeconfig_updated
+      ignore_errors: true
+
+    - name: Show kubeconfig update status
+      debug:
+        msg: "Kubeconfig was {{ 'updated' if kubeconfig_updated.changed else 'already correct or not found' }}"
   become: true
 
 - name: Display message if kubeconfig doesn't exist yet
   debug:
     msg: "Kubeconfig file doesn't exist yet. It will be created later in the deployment process."
   when: not kubeconfig_file.stat.exists | default(false)
+
+- name: Install k9s for improved Kubernetes UX
+  block:
+    - name: Get latest k9s release version
+      uri:
+        url: https://api.github.com/repos/derailed/k9s/releases/latest
+        return_content: yes
+      register: k9s_latest_release
+      failed_when: false # Don't fail the whole playbook if GitHub API is down
+
+    - name: Set k9s version (latest or fallback)
+      set_fact:
+        k9s_version: "{{ k9s_latest_release.json.tag_name | default('v0.28.0') }}"
+
+    - name: Download k9s
+      get_url:
+        url: "https://github.com/derailed/k9s/releases/download/{{ k9s_version }}/k9s_Linux_amd64.tar.gz"
+        dest: "/tmp/k9s.tar.gz"
+        mode: "0644"
+        timeout: 60
+      register: k9s_download
+      retries: 3
+      delay: 5
+      until: k9s_download is succeeded
+
+    - name: Create temporary directory for k9s extraction
+      file:
+        path: /tmp/k9s_extract
+        state: directory
+        mode: "0755"
+
+    - name: Extract k9s
+      unarchive:
+        src: /tmp/k9s.tar.gz
+        dest: /tmp/k9s_extract
+        remote_src: yes
+
+    - name: Move k9s binary to /usr/local/bin
+      copy:
+        src: /tmp/k9s_extract/k9s
+        dest: /usr/local/bin/k9s
+        mode: "0755"
+        remote_src: yes
+
+    - name: Create k9s config directory
+      file:
+        path: ~/.config/k9s
+        state: directory
+        mode: "0700"
+
+    - name: Configure k9s with sensible defaults
+      copy:
+        dest: ~/.config/k9s/config.yml
+        content: |
+          # K9s Configuration - Auto-generated for Kubernetes management
+          k9s:
+            refreshRate: 2
+            headless: false
+            readOnly: false
+            noIcons: false
+            logger:
+              tail: 100
+              buffer: 5000
+            currentContext: default
+            currentCluster: default
+            clusters:
+              default:
+                namespace:
+                  active: default
+                  favorites:
+                    - default
+                    - kube-system
+                    - ingress-nginx
+                view:
+                  active: pods
+                featureGates:
+                  nodeShell: false
+                shellPod:
+                  image: busybox:1.35.0
+                  command: []
+                  args: []
+                  namespace: default
+                  limits:
+                    cpu: 100m
+                    memory: 100Mi
+        mode: "0600"
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /tmp/k9s.tar.gz
+        - /tmp/k9s_extract
+  become: true
+  ignore_errors: yes # Continue with other tasks even if k9s installation fails
+
+- name: Set up unified kubectl and k9s configuration in shell profile
+  blockinfile:
+    path: "/root/.bashrc"
+    marker: "# {mark} KUBERNETES TOOLS CONFIGURATION"
+    block: |
+      # Set up kubectl to work without manual configuration
+      export KUBECONFIG=/root/.kube/config
+
+      # Useful aliases
+      alias k=kubectl
+      alias k9s='k9s --readonly=false --logoless'
+
+      # Display cluster info on login
+      if [ -f "$KUBECONFIG" ]; then
+        echo "Kubernetes cluster information:"
+        kubectl cluster-info 2>/dev/null || echo "Cluster not accessible yet"
+        echo ""
+        echo "Management Tools Available:"
+        echo "  - kubectl: Run 'kubectl get nodes' to see cluster nodes"
+        if command -v k9s >/dev/null 2>&1; then
+          echo "  - k9s: Run 'k9s' to launch the interactive Kubernetes TUI"
+          echo "    • Press '?' in k9s for help and keyboard shortcuts"
+          echo "    • Press 'Ctrl+A' in k9s to access command menu"
+          echo "    • Press 'Esc' to go back or exit a view"
+        fi
+      fi
+    create: yes
+  become: true
