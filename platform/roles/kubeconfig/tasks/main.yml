@@ -3,7 +3,7 @@
 
 - name: Debug primary control node information
   debug:
-    msg: 
+    msg:
       - "Primary control node: {{ primary_control_node }}"
       - "Primary control IP: {{ hostvars[primary_control_node]['ansible_host'] }}"
 
@@ -11,21 +11,21 @@
   file:
     path: "~/.kube/k3s"
     state: directory
-    mode: '0700'
+    mode: "0700"
   delegate_to: localhost
 
 - name: Get kubeconfig directly via SSH from primary control plane node
   shell: >
-    ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ hostvars[primary_control_node]['ansible_host'] }} 
+    ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ hostvars[primary_control_node]['ansible_host'] }}
     'cat /etc/rancher/k3s/k3s.yaml 2>/dev/null || echo "KUBECONFIG_NOT_FOUND"'
   register: kubeconfig_ssh_result
   delegate_to: localhost
   changed_when: false
-  
+
 - name: Debug SSH kubeconfig result excerpt (first few lines)
   debug:
     msg: "{{ kubeconfig_ssh_result.stdout_lines[0:3] if kubeconfig_ssh_result.stdout_lines|length > 0 else 'No output' }}"
-  
+
 - name: Set kubeconfig found facts based on SSH result
   set_fact:
     k3s_kubeconfig_found: "{{ 'KUBECONFIG_NOT_FOUND' not in kubeconfig_ssh_result.stdout }}"
@@ -34,7 +34,7 @@
 - name: Show kubeconfig status
   debug:
     msg: "Kubeconfig found via SSH: {{ k3s_kubeconfig_found }}"
-  
+
 # Save and modify kubeconfig when found
 - name: Process kubeconfig when found
   block:
@@ -42,13 +42,13 @@
       copy:
         content: "{{ k3s_kubeconfig_content }}"
         dest: "{{ playbook_dir }}/../k3s.yaml"
-        mode: '0600'
+        mode: "0600"
       delegate_to: localhost
 
     - name: Set server URL in kubeconfig (updating from 127.0.0.1 to external IP)
       replace:
         path: "{{ playbook_dir }}/../k3s.yaml"
-        regexp: 'https://127.0.0.1:6443'
+        regexp: "https://127.0.0.1:6443"
         replace: "https://{{ hostvars[primary_control_node]['ansible_host'] }}:6443"
       delegate_to: localhost
 
@@ -56,7 +56,7 @@
       copy:
         src: "{{ playbook_dir }}/../k3s.yaml"
         dest: "~/.kube/k3s/config"
-        mode: '0600'
+        mode: "0600"
         remote_src: yes
       delegate_to: localhost
   when: k3s_kubeconfig_found | bool
@@ -81,7 +81,25 @@
       2. K3s is installed but not yet finished initializing
       3. The kubeconfig file is in a different location
       4. There may be SSH configuration issues preventing access
-      
+
       Try running the following command manually to verify:
       ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ hostvars[primary_control_node]['ansible_host'] }} 'ls -la /etc/rancher/k3s/k3s.yaml'
   when: not k3s_kubeconfig_found | bool
+
+- name: Ensure .kube directory exists on management nodes
+  file:
+    path: "/root/.kube"
+    state: directory
+    mode: "0700"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['k3s_management'] }}"
+  when: k3s_kubeconfig_found | bool
+
+- name: Copy kubeconfig to management nodes
+  copy:
+    content: "{{ k3s_kubeconfig_content }}"
+    dest: "/root/.kube/config"
+    mode: "0600"
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['k3s_management'] }}"
+  when: k3s_kubeconfig_found | bool
