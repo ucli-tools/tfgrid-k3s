@@ -31,6 +31,9 @@ wireguard:
 dns:
 	cd scripts && bash configure-dns.sh
 
+k9s:
+	ssh -t root@10.1.3.2 "k9s"
+
 # Ping nodes to check connectivity
 ping:
 	cd scripts && bash ping.sh
