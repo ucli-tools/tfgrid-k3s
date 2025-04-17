@@ -31,6 +31,11 @@ wireguard:
 dns:
 	cd scripts && bash configure-dns.sh
 
+# Connect to management node
+connect:
+	ssh root@10.1.3.2
+
+# Connect to management node and see K9s TUI
 k9s:
 	ssh -t root@10.1.3.2 "k9s"
 
