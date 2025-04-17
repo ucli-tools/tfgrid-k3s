@@ -116,12 +116,44 @@
   register: kubeconfig_file
   delegate_to: localhost
 
+- name: Ensure .kube directory exists
+  file:
+    path: "~/.kube"
+    state: directory
+    mode: "0700"
+
 - name: Copy kubeconfig to management node
   copy:
     src: "{{ playbook_dir }}/../k3s.yaml"
     dest: ~/.kube/config
     mode: "0600"
   when: kubeconfig_file.stat.exists | default(false)
+  register: kubeconfig_copied
+
+- name: Update kubeconfig server address
+  replace:
+    path: ~/.kube/config
+    regexp: "https://127.0.0.1:6443"
+    replace: 'https://{{ hostvars[primary_control_node | default("node1")]["ansible_host"] }}:6443'
+  when: kubeconfig_copied is defined and kubeconfig_copied.changed
+
+- name: Set up kubectl configuration in shell profile
+  blockinfile:
+    path: "/root/.bashrc"
+    marker: "# {mark} KUBERNETES CONFIGURATION"
+    block: |
+      # Set up kubectl to work without manual configuration
+      export KUBECONFIG=/root/.kube/config
+      alias k=kubectl
+
+      # Display cluster info on login (comment out if not desired)
+      if [ -f /root/.kube/config ]; then
+        echo "Kubernetes cluster information:"
+        kubectl cluster-info 2>/dev/null || echo "Cluster not accessible yet"
+        echo "Use 'kubectl get nodes' to see cluster nodes"
+      fi
+    create: yes
+  become: true
 
 - name: Display message if kubeconfig doesn't exist yet
   debug:
