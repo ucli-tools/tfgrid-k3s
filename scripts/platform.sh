@@ -32,25 +32,18 @@ fi
 
 # --- Deploy K3s Cluster ---
 echo "=== Deploying K3s Cluster ==="
-echo "Note: We're now deploying K3s from the management node!"
+echo "Running deployment for all components..."
 
-# Deploy K3s cluster from the management node
-echo "Running deployment from management node..."
-ssh -o StrictHostKeyChecking=no root@$MGMT_HOST "cd ~/tfgrid-k3s/platform && ansible-playbook site.yml -t common,control,worker"
-
-# Check if deployment was successful
-if [ $? -ne 0 ]; then
-  echo "K3s deployment from management node failed!"
+# Deploy K3s cluster using a single Ansible command
+# This avoids the direct SSH approach that was failing
+if ! ansible-playbook site.yml -t common,control,worker,kubeconfig; then
+  echo "K3s deployment failed!"
   exit 1
 fi
 
 # Wait for K3s to stabilize
 echo "Waiting for K3s cluster to stabilize (60 seconds)..."
 sleep 60
-
-# Setup kubectl configuration on management node
-echo "Setting up kubectl configuration on management node..."
-ssh -o StrictHostKeyChecking=no root@$MGMT_HOST "cd ~/tfgrid-k3s/platform && ansible-playbook site.yml -t kubeconfig"
 
 echo "=== K3s Platform Deployment Completed Successfully! ==="
 echo ""

@@ -17,22 +17,39 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-# Function to ping a host
+# Define retry variables
+MAX_RETRIES=5
+RETRY_DELAY=5  # seconds
+
+# Function to ping a host with retries
 ping_host() {
     local user=$1
     local ip=$2
     local name=$3
+    local retries=0
 
     echo -n "  $name (${user}@${ip})... "
-    if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${user}@${ip}" "echo 'Success'" &>/dev/null; then
-        echo -e "${GREEN}Success!${NC}"
-        return 0
-    else
-        echo -e "${RED}Failed!${NC}"
-        return 1
-    fi
+
+    while [ $retries -lt $MAX_RETRIES ]; do
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${user}@${ip}" "echo 'Success'" &>/dev/null; then
+            echo -e "${GREEN}Success!${NC}"
+            return 0
+        else
+            retries=$((retries+1))
+
+            if [ $retries -lt $MAX_RETRIES ]; then
+                echo -e "${YELLOW}Failed (attempt $retries/$MAX_RETRIES)${NC}"
+                echo -n "  Retrying in $RETRY_DELAY seconds... "
+                sleep $RETRY_DELAY
+            else
+                echo -e "${RED}Failed after $MAX_RETRIES attempts!${NC}"
+                return 1
+            fi
+        fi
+    done
 }
 
 # Initialize counters

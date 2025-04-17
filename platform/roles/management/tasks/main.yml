@@ -11,8 +11,36 @@
       - vim
       - wget
       - wireguard
+      - rsync # Add rsync to the package list
     state: present
     update_cache: yes
+  become: true
+
+- name: Set hostname based on inventory name (if valid format)
+  block:
+    - name: Generate valid hostname from inventory_hostname
+      set_fact:
+        valid_hostname: "{{ inventory_hostname | replace('_', '-') }}"
+
+    - name: Set hostname
+      hostname:
+        name: "{{ valid_hostname }}"
+      become: true
+
+    - name: Update /etc/hosts with proper hostname
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s+.*$'
+        line: "127.0.1.1 {{ valid_hostname }}"
+        state: present
+      become: true
+
+- name: Update /etc/hosts with proper hostname
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s+.*$'
+    line: "127.0.1.1 {{ inventory_hostname }}"
+    state: present
   become: true
 
 - name: Install kubectl
@@ -31,32 +59,71 @@
     creates: /usr/local/bin/helm
   become: true
 
-- name: Create required directories
+- name: Ensure target directory exists on management node
   file:
-    path: "{{ item }}"
+    path: "~/tfgrid-k3s"
     state: directory
     mode: "0755"
-  with_items:
-    - ~/tfgrid-k3s
-    - ~/tfgrid-k3s/infrastructure
-    - ~/tfgrid-k3s/platform
-    - ~/tfgrid-k3s/scripts
-    - ~/.kube
 
-- name: Copy deployment files to management node
+- name: Synchronize entire tfgrid-k3s directory to management node
   synchronize:
-    src: "{{ playbook_dir }}/../{{ item }}"
-    dest: ~/tfgrid-k3s/
-  with_items:
-    - infrastructure/
-    - platform/
-    - scripts/
-    - Makefile
-    - README.md
+    src: "{{ playbook_dir }}/../" # Assuming playbook_dir points to roles/management/tasks
+    dest: "~/tfgrid-k3s/"
+    delete: yes # Remove files that don't exist in source
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=*.retry"
+      - "--exclude=node_modules"
+      - "--exclude=.terraform"
+      - "--exclude=.terraform.lock.hcl"
+      - "--exclude=.vscode"
+      - "--exclude=*.swp"
+      - "--exclude=*.swo"
+      - "--exclude=__pycache__"
+  become: no # Typically better to run rsync as the user who will own the files
+
+- name: Find all shell scripts in tfgrid-k3s
+  find:
+    paths: "{{ ansible_env.HOME }}/tfgrid-k3s"
+    patterns: "*.sh"
+    recurse: yes
+  register: shell_scripts
+
+- name: Debug - show found shell scripts
+  debug:
+    msg: "Found {{ shell_scripts.files | length }} shell scripts"
+  when: shell_scripts.files | length > 0
+
+- name: Set executable permissions on all shell scripts
+  file:
+    path: "{{ item.path }}"
+    mode: "0755"
+  with_items: "{{ shell_scripts.files }}"
+  when: shell_scripts.files | length > 0
+
+- name: Validate directory structure
+  shell: ls -la ~/tfgrid-k3s/
+  register: dir_listing
+  changed_when: false
+
+- name: Show directory contents
+  debug:
+    var: dir_listing.stdout_lines
+
+- name: Check if kubeconfig file exists
+  stat:
+    path: "{{ playbook_dir }}/../k3s.yaml"
+  register: kubeconfig_file
+  delegate_to: localhost
 
 - name: Copy kubeconfig to management node
   copy:
     src: "{{ playbook_dir }}/../k3s.yaml"
     dest: ~/.kube/config
     mode: "0600"
-  when: lookup('file', playbook_dir + '/../k3s.yaml', errors='ignore') != ""
+  when: kubeconfig_file.stat.exists | default(false)
+
+- name: Display message if kubeconfig doesn't exist yet
+  debug:
+    msg: "Kubeconfig file doesn't exist yet. It will be created later in the deployment process."
+  when: not kubeconfig_file.stat.exists | default(false)
