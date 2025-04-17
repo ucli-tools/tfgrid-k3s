@@ -10,7 +10,6 @@
       - curl
       - vim
       - wget
-      - opentofu
       - wireguard
     state: present
     update_cache: yes

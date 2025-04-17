@@ -22,9 +22,9 @@ This repository combines infrastructure provisioning via Terraform/OpenTofu with
 
 The deployment consists of:
 
-1. **Control Plane Nodes**: Run the Kubernetes control plane components
-2. **Worker Nodes**: Run application workloads
-3. **Management Node**: Dedicated node for cluster management with all required tools
+1. **Control Plane Nodes**: Run the Kubernetes control plane components (`k3s_control` group)
+2. **Worker Nodes**: Run application workloads (`k3s_worker` group)
+3. **Management Node**: Dedicated node for cluster management with all required tools (`k3s_management` group)
 
 The management node lives within the same private network as your cluster nodes, providing secure management without exposing your cluster to the public internet.
 
@@ -41,7 +41,7 @@ The management node lives within the same private network as your cluster nodes,
 
 1. Clone this repository:
    ```
-   git clone https://github.com/mik-tf/tfgrid-k3s
+   git clone https://github.com/threefoldtech/tfgrid-k3s
    cd tfgrid-k3s
    ```
 
@@ -63,20 +63,14 @@ The management node lives within the same private network as your cluster nodes,
 
 3. Deploy the cluster:
 
-   **Option A**: Using Make (recommended)
    ```bash
-   # Simply run make from the repository root
+   # Deploy everything in one go (infrastructure, platform, applications)
    make
-   ```
 
-   **Option B**: Directly using the script
-   ```bash
-   # Important: The script must be run from within the scripts directory
-   cd scripts
-   bash deploy.sh
-
-   # Do NOT run it this way (will fail due to relative paths in the script):
-   # bash scripts/deploy.sh
+   # Or deploy step by step:
+   make infrastructure   # Deploy ThreeFold Grid VMs
+   make platform         # Configure K3s on the infrastructure
+   make app              # Deploy applications on the K3s cluster
    ```
 
    > **Tip**: Run `make help` to see all available make commands
@@ -86,12 +80,32 @@ The management node lives within the same private network as your cluster nodes,
    unset TF_VAR_mnemonic
    ```
 
-   This will:
-   - Provision the infrastructure with OpenTofu including the management node
-   - Set up WireGuard for secure communications
-   - Configure the management node with necessary tools
-   - Deploy the K3s cluster using the management node
-   - Set up kubectl on the management node
+## Deployment Process
+
+The deployment happens in three distinct phases, which can be run individually or together:
+
+### 1. Infrastructure Deployment (`make infrastructure`)
+
+Runs `scripts/infrastructure.sh`, which:
+- Cleans up any previous infrastructure
+- Initializes and applies Terraform/OpenTofu configuration
+- Sets up WireGuard connections
+- Generates the Ansible inventory based on deployed nodes
+- Tests connectivity to all nodes
+
+### 2. Platform Deployment (`make platform`)
+
+Runs `scripts/platform.sh`, which:
+- Configures the management node with required tools (Ansible, kubectl, Helm)
+- Deploys the K3s control plane on the `k3s_control` nodes
+- Joins worker nodes to the cluster
+- Sets up kubectl configuration for easy access
+
+### 3. Application Deployment (`make app`)
+
+Runs `scripts/app.sh`, which:
+- Verifies the cluster is ready
+- Deploys your applications (customizable)
 
 ## Using the Management Node
 
@@ -101,9 +115,10 @@ The management node is your central location for all cluster operations. After d
 
 ```bash
 # Connect to the management node
-ssh root@<management-node-ip>
+make connect-management
 
-# Example: ssh root@185.206.122.33
+# Or directly:
+ssh root@<management-node-ip>
 ```
 
 ### Managing Your Cluster from the Management Node
@@ -132,15 +147,17 @@ The management node has all necessary tools pre-installed:
 - OpenTofu
 - WireGuard
 
-### Deployment Files Location
+## Additional Management Commands
 
-All deployment files are copied to the management node at `~/tfgrid-k3s/`:
+```bash
+# Check connectivity to all nodes
+make ping
 
-```
-tfgrid-k3s/
-├── infrastructure/    # Infrastructure configuration
-├── platform/          # Ansible playbooks and roles
-└── scripts/           # Utility scripts
+# Verify cluster permissions
+make permissions
+
+# Clean up deployment resources
+make clean
 ```
 
 ## Project Structure
@@ -159,20 +176,19 @@ tfgrid_k3s/
 │   │   └── kubeconfig/# kubectl configuration
 │   └── site.yml       # Main deployment playbook
 ├── scripts/           # Deployment and utility scripts
-│   ├── cleantf.sh     # Script to clean Terraform/OpenTofu state and files
-│   ├── configure-dns.sh # DNS configuration utility
-│   ├── deploy.sh      # Main deployment script with security checks
-│   ├── generate-inventory.sh # Generate Ansible inventory from deployment
+│   ├── infrastructure.sh # Script to deploy infrastructure
+│   ├── platform.sh    # Script to deploy platform
+│   ├── app.sh         # Script to deploy applications
+│   ├── cleantf.sh     # Script to clean Terraform/OpenTofu state
 │   ├── ping.sh        # Connectivity test utility
 │   └── wg.sh          # WireGuard setup script
+├── Makefile           # Main interface for all deployment commands
 └── docs/              # Additional documentation
     ├── security.md    # Security best practices documentation
     └── troubleshooting.md # Solutions to common issues
 ```
 
-## Configuration
-
-### Infrastructure Configuration
+## Infrastructure Configuration
 
 In your `credentials.auto.tfvars` file, you can configure:
 
@@ -201,17 +217,6 @@ worker_mem = 16384   # 16GB RAM
 worker_disk = 250    # 250GB storage
 ```
 
-### Advanced Configuration
-
-The configuration files contain comments explaining each setting. You can customize:
-
-- **Infrastructure**: Number of nodes, instance types, region, etc.
-- **Kubernetes**: Number of control and worker nodes
-- **Management Node**: CPU, memory, and storage allocation
-- **IPv4 Configuration**: Control whether worker nodes get public IPv4 addresses
-
-Refer to the example files for all available configuration options.
-
 ## Maintenance and Updates
 
 ### Updating Cluster Configuration
@@ -228,34 +233,31 @@ ansible-playbook site.yml
 To add or remove nodes:
 
 1. Update your `credentials.auto.tfvars` file
-2. Run the `deploy.sh` script again
-3. The script will update your infrastructure and reconfigure the cluster
+2. Run `make infrastructure` again to update the infrastructure
+3. Run `make platform` to reconfigure the cluster
 
 ## Troubleshooting
 
 See the [troubleshooting guide](docs/troubleshooting.md) for common issues and solutions.
 
-### Management Node Issues
+### Common Issues
+
+#### Management Node Connection Issues
 
 If you can't connect to the management node:
 
 1. Verify the node has been deployed correctly:
    ```bash
    cd infrastructure
-   tofu output management_node_ip
+   tofu output management_node_wireguard_ip
    ```
 
-2. Check if you can ping the management node:
+2. Check WireGuard connection status:
    ```bash
-   ping <management-node-ip>
+   sudo wg show
    ```
 
-3. Verify SSH access:
-   ```bash
-   ssh -v root@<management-node-ip>
-   ```
-
-### Cluster Access Issues
+#### Kubernetes Access Issues
 
 If you can connect to the management node but can't access the cluster:
 
@@ -264,15 +266,14 @@ If you can connect to the management node but can't access the cluster:
    kubectl cluster-info
    ```
 
-2. Verify the kubeconfig:
-   ```bash
-   cat ~/.kube/config
-   ```
-
-3. Check if all nodes are running:
+2. Verify the cluster nodes are running:
    ```bash
    kubectl get nodes
    ```
+
+## DNS Configuration
+
+For setting up DNS for applications running on your cluster, see [DNS Configuration Guide](docs/dns-configuration.md).
 
 ## Contributing
 

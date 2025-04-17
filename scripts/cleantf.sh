@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+
+# Don't exit on errors, instead continue and report issues
+set +e
 
 # Get script directory
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -18,27 +20,47 @@ TO_REMOVE=(
   "state.json"
 )
 
+# Check deployment directory exists
+if [ ! -d "$DEPLOYMENT_DIR" ]; then
+  echo "Warning: Deployment directory not found at $DEPLOYMENT_DIR"
+  # Create it so we can continue
+  mkdir -p "$DEPLOYMENT_DIR" || { echo "Failed to create directory. Exiting."; exit 1; }
+fi
+
 # Change to deployment directory
-cd "$DEPLOYMENT_DIR" || exit 1
+cd "$DEPLOYMENT_DIR" || { echo "Failed to change to $DEPLOYMENT_DIR. Exiting."; exit 1; }
 
-tofu destroy -auto-approve >/dev/null 2>&1 || true
+# Run tofu destroy with timeout to prevent hanging
+echo "Running 'tofu destroy' (with 5-minute timeout)..."
+timeout 300 tofu destroy -auto-approve >/dev/null 2>&1 || {
+  echo "Note: 'tofu destroy' command exited with non-zero status. Continuing with cleanup..."
+}
 
-# Remove files and directories
+# Remove files and directories with feedback
+echo "Removing Terraform/OpenTofu files and directories..."
 for item in "${TO_REMOVE[@]}"; do
-  find . -name "$item" -exec rm -rf {} \; 2>/dev/null || true
+  echo "  Finding and removing: $item"
+  # Use -depth to process contents before directory itself
+  find . -name "$item" -depth -print -exec rm -rf {} \; 2>/dev/null || true
+  echo "  Done."
 done
 
-# Down wireguard if it exists
+# Check and bring down wireguard if it exists
 if [ -f "/etc/wireguard/k3s.conf" ]; then
   echo "Bringing down WireGuard interface..."
-  sudo wg-quick down k3s 2>/dev/null || true
-  sudo rm -f /etc/wireguard/k3s.conf
+  # Add timeout to prevent hanging
+  timeout 30 sudo wg-quick down k3s 2>/dev/null || {
+    echo "Note: Failed to bring down WireGuard with wg-quick. Trying alternative method..."
+    sudo ip link delete k3s 2>/dev/null || true
+  }
+  sudo rm -f /etc/wireguard/k3s.conf 2>/dev/null || echo "Warning: Could not remove WireGuard config file."
 fi
 
-# Remove inventory
-if [ -f "$SCRIPT_DIR/../platform/inventory.ini" ]; then
+# Remove inventory file
+INVENTORY_PATH="$SCRIPT_DIR/../platform/inventory.ini"
+if [ -f "$INVENTORY_PATH" ]; then
   echo "Removing Ansible inventory..."
-  rm -f "$SCRIPT_DIR/../platform/inventory.ini"
+  rm -f "$INVENTORY_PATH" 2>/dev/null || echo "Warning: Could not remove Ansible inventory file."
 fi
 
-echo "Cleanup completed!"
+echo "Cleanup completed successfully!"

@@ -1,13 +1,13 @@
 ---
 - name: Configure Management Node
-  hosts: management
+  hosts: k3s_management
   become: yes
   roles:
     - role: management
       tags: [management]
 
 - name: Configure Common
-  hosts: all:!management
+  hosts: all:!k3s_management
   become: yes
   roles:
     - role: common
@@ -28,7 +28,7 @@
       tags: [worker]
 
 - name: Setup local kubeconfig for K3s cluster
-  hosts: management
+  hosts: k3s_management
   become: no
   roles:
     - role: kubeconfig

@@ -48,14 +48,15 @@ variable "management_disk" {
 }
 
 provider "grid" {
-  mnemonic = var.mnemonic
-  network  = "main"
+  mnemonic  = var.mnemonic
+  network   = "main"
+  relay_url = "wss://relay.grid.tf"
 }
 
 # Generate unique mycelium keys/seeds for all nodes
 locals {
   cluster_nodes = concat(var.control_nodes, var.worker_nodes)
-  all_nodes     = concat(local.cluster_nodes, [var.management_node])
+  all_nodes     = concat([var.management_node], local.cluster_nodes)
 }
 
 resource "random_bytes" "k3s_mycelium_key" {
@@ -79,7 +80,7 @@ resource "random_bytes" "mgmt_ip_seed" {
 
 # Mycelium overlay network
 resource "grid_network" "k3s_network" {
-  name          = "k3s_cluster_network"
+  name          = "k3s_cluster_netww"
   nodes         = local.all_nodes
   ip_range      = "10.1.0.0/16"
   add_wg_access = true

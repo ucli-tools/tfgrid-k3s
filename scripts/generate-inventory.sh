@@ -15,7 +15,19 @@ command -v jq >/dev/null 2>&1 || {
 
 # Clear existing file and generate new inventory
 echo "Generating inventory from Terraform outputs..."
-echo "# K3s Control Plane Nodes" > "$OUTPUT_FILE"
+
+# Start with Management Node section at the top of the file
+echo "# Management Nodes" > "$OUTPUT_FILE"
+echo "[k3s_management]" >> "$OUTPUT_FILE"
+
+# Generate management node
+tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
+  .values.outputs.management_node_wireguard_ip.value |
+  "mgmt_host ansible_host=\(.) ansible_user=root"
+' >> "$OUTPUT_FILE"
+
+# Then add K3s Control Plane Nodes
+echo -e "\n# K3s Control Plane Nodes" >> "$OUTPUT_FILE"
 echo "[k3s_control]" >> "$OUTPUT_FILE"
 
 # Generate control plane nodes (node1, node2, node3)
@@ -41,16 +53,6 @@ echo -e "\n# All K3s Nodes" >> "$OUTPUT_FILE"
 echo "[k3s_cluster:children]" >> "$OUTPUT_FILE"
 echo "k3s_control" >> "$OUTPUT_FILE"
 echo "k3s_worker" >> "$OUTPUT_FILE"
-
-# Add management node section
-echo -e "\n# Management Node" >> "$OUTPUT_FILE"
-echo "[management]" >> "$OUTPUT_FILE"
-
-# Generate management node
-tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
-  .values.outputs.management_node_wireguard_ip.value |
-  "management ansible_host=\(.) ansible_user=root"
-' >> "$OUTPUT_FILE"
 
 # Add global variables
 echo -e "\n# Global Variables" >> "$OUTPUT_FILE"
