@@ -279,10 +279,6 @@ If you can connect to the management node but can't access the cluster:
    kubectl get nodes
    ```
 
-## DNS Configuration
-
-For setting up DNS for applications running on your cluster, see [DNS Configuration Guide](docs/dns-configuration.md).
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
