@@ -1,7 +1,7 @@
 .PHONY: all infrastructure platform app clean wireguard dns ping help permissions connect
 
 # Default target
-all: infrastructure platform
+all: infrastructure platform app
 
 # Deploy infrastructure only (ThreeFold Grid VMs)
 infrastructure:
