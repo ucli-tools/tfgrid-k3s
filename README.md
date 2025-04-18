@@ -41,7 +41,7 @@ The management node lives within the same private network as your cluster nodes,
 
 1. Clone this repository:
    ```
-   git clone https://github.com/threefoldtech/tfgrid-k3s
+   git clone https://github.com/mik-tf/tfgrid-k3s
    cd tfgrid-k3s
    ```
 
