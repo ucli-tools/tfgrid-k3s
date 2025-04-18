@@ -1,11 +1,27 @@
-.PHONY: deploy clean wireguard dns ping help permissions
+.PHONY: all infrastructure platform app clean wireguard dns ping help permissions connect
 
 # Default target
-all: deploy
+all: infrastructure platform app
 
-# Primary target to deploy the K3s cluster
-deploy:
-	cd scripts && bash deploy.sh
+# Deploy infrastructure only (ThreeFold Grid VMs)
+infrastructure:
+	cd scripts && bash infrastructure.sh
+
+# Deploy platform only (K3s cluster)
+platform:
+	cd scripts && bash platform.sh
+
+# Deploy applications
+app:
+	cd scripts && bash app.sh
+
+# Connect to management node
+connect:
+	cd scripts && bash connect-management.sh
+
+# Connect to management node and see K9s TUI
+k9s:
+	cd scripts && bash k9s.sh
 
 # Clean up Terraform/OpenTofu resources
 clean:
@@ -32,10 +48,14 @@ permissions:
 # Help information
 help:
 	@echo "TFGrid K3s Makefile Targets:"
-	@echo "  make         - Run the default deployment (same as 'make deploy')"
-	@echo "  make deploy  - Deploy the K3s cluster on ThreeFold Grid"
-	@echo "  make clean   - Clean up and destroy Terraform/OpenTofu resources"
-	@echo "  make wireguard - Set up the WireGuard connection"
-	@echo "  make dns     - Configure DNS settings"
-	@echo "  make ping    - Ping nodes to check connectivity"
-	@echo "  make permissions - Check cluster permissions"
+	@echo "  make                - Run the complete deployment (infrastructure + platform + app)"
+	@echo "  make all            - Same as 'make'"
+	@echo "  make infrastructure - Deploy only ThreeFold Grid infrastructure"
+	@echo "  make platform       - Deploy only K3s platform on existing infrastructure"
+	@echo "  make app            - Deploy applications on existing platform"
+	@echo "  make clean          - Clean up and destroy Terraform/OpenTofu resources"
+	@echo "  make wireguard      - Set up the WireGuard connection"
+	@echo "  make dns            - Configure DNS settings"
+	@echo "  make ping           - Ping nodes to check connectivity"
+	@echo "  make connect        - SSH into the management node"
+	@echo "  make permissions    - Check cluster permissions"

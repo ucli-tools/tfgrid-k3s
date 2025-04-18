@@ -7,21 +7,33 @@ DEPLOYMENT_DIR="$SCRIPT_DIR/../infrastructure"
 OUTPUT_FILE="$SCRIPT_DIR/../platform/inventory.ini"
 
 # Check dependencies
-command -v jq >/dev/null 2>&1 || { 
-    echo >&2 "ERROR: jq required but not found. Install with: 
+command -v jq >/dev/null 2>&1 || {
+    echo >&2 "ERROR: jq required but not found. Install with:
     sudo apt install jq || brew install jq";
     exit 1;
 }
 
 # Clear existing file and generate new inventory
 echo "Generating inventory from Terraform outputs..."
-echo "# K3s Control Plane Nodes" > "$OUTPUT_FILE"
+
+# Start with Management Node section at the top of the file
+echo "# Management Nodes" > "$OUTPUT_FILE"
+echo "[k3s_management]" >> "$OUTPUT_FILE"
+
+# Generate management node
+tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
+  .values.outputs.management_node_wireguard_ip.value |
+  "mgmt_host ansible_host=\(.) ansible_user=root"
+' >> "$OUTPUT_FILE"
+
+# Then add K3s Control Plane Nodes
+echo -e "\n# K3s Control Plane Nodes" >> "$OUTPUT_FILE"
 echo "[k3s_control]" >> "$OUTPUT_FILE"
 
 # Generate control plane nodes (node1, node2, node3)
 tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
-  .values.outputs.wireguard_ips.value | 
-  to_entries | map(select(.key | test("node_[0-2]"))) | 
+  .values.outputs.wireguard_ips.value |
+  to_entries | map(select(.key | test("node_[0-2]"))) |
   .[] | "node\((.key | split("_")[1] | tonumber + 1)) ansible_host=\(.value) ansible_user=root"
 ' >> "$OUTPUT_FILE"
 
@@ -31,8 +43,8 @@ echo "[k3s_worker]" >> "$OUTPUT_FILE"
 
 # Generate worker nodes (node4, node5, node6)
 tofu -chdir="$DEPLOYMENT_DIR" show -json | jq -r '
-  .values.outputs.wireguard_ips.value | 
-  to_entries | map(select(.key | test("node_[3-5]"))) | 
+  .values.outputs.wireguard_ips.value |
+  to_entries | map(select(.key | test("node_[3-5]"))) |
   .[] | "node\((.key | split("_")[1] | tonumber + 1)) ansible_host=\(.value) ansible_user=root"
 ' >> "$OUTPUT_FILE"
 

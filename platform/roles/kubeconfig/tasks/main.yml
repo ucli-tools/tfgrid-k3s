@@ -1,87 +1,92 @@
 ---
-# Tasks for setting up kubectl configuration for local management
+# Tasks for setting up kubectl configuration for local management AND management node
 
-- name: Debug primary control node information
-  debug:
-    msg: 
-      - "Primary control node: {{ primary_control_node }}"
-      - "Primary control IP: {{ hostvars[primary_control_node]['ansible_host'] }}"
+- name: Set primary control node IP fact # Ensure we have the IP easily accessible
+  ansible.builtin.set_fact:
+    primary_control_ip: "{{ hostvars[primary_control_node]['ansible_host'] }}"
 
-- name: Ensure ~/.kube/k3s directory exists on localhost
-  file:
-    path: "~/.kube/k3s"
-    state: directory
-    mode: '0700'
-  delegate_to: localhost
-
-- name: Get kubeconfig directly via SSH from primary control plane node
-  shell: >
-    ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ hostvars[primary_control_node]['ansible_host'] }} 
+- name: Get kubeconfig content directly via SSH from primary control plane node
+  ansible.builtin.shell: >
+    ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ primary_control_ip }}
     'cat /etc/rancher/k3s/k3s.yaml 2>/dev/null || echo "KUBECONFIG_NOT_FOUND"'
   register: kubeconfig_ssh_result
-  delegate_to: localhost
+  delegate_to: localhost # Run the SSH command from the Ansible controller
   changed_when: false
-  
-- name: Debug SSH kubeconfig result excerpt (first few lines)
-  debug:
-    msg: "{{ kubeconfig_ssh_result.stdout_lines[0:3] if kubeconfig_ssh_result.stdout_lines|length > 0 else 'No output' }}"
-  
+  check_mode: no # Ensure this runs even in check mode to get the content
+
 - name: Set kubeconfig found facts based on SSH result
-  set_fact:
+  ansible.builtin.set_fact:
     k3s_kubeconfig_found: "{{ 'KUBECONFIG_NOT_FOUND' not in kubeconfig_ssh_result.stdout }}"
-    k3s_kubeconfig_content: "{{ kubeconfig_ssh_result.stdout if 'KUBECONFIG_NOT_FOUND' not in kubeconfig_ssh_result.stdout else '' }}"
+    k3s_kubeconfig_content_original: "{{ kubeconfig_ssh_result.stdout if 'KUBECONFIG_NOT_FOUND' not in kubeconfig_ssh_result.stdout else '' }}"
 
 - name: Show kubeconfig status
-  debug:
+  ansible.builtin.debug:
     msg: "Kubeconfig found via SSH: {{ k3s_kubeconfig_found }}"
-  
-# Save and modify kubeconfig when found
-- name: Process kubeconfig when found
+
+# --- Process for LOCAL KUBECONFIG (in project dir) ---
+- name: Process LOCAL kubeconfig when found
+  when: k3s_kubeconfig_found | bool
   block:
-    - name: Save original kubeconfig to project directory
-      copy:
-        content: "{{ k3s_kubeconfig_content }}"
-        dest: "{{ playbook_dir }}/../k3s.yaml"
-        mode: '0600'
+    - name: Modify fetched kubeconfig content for LOCAL use
+      ansible.builtin.set_fact:
+        modified_kubeconfig_local: "{{ k3s_kubeconfig_content_original | replace('https://127.0.0.1:6443', 'https://' + primary_control_ip + ':6443') }}"
+
+    - name: Save MODIFIED kubeconfig to project directory (../k3s.yaml)
+      ansible.builtin.copy:
+        content: "{{ modified_kubeconfig_local }}"
+        dest: "{{ playbook_dir }}/../k3s.yaml" # playbook_dir is roles/kubeconfig, so ../ goes to platform/
+        mode: "0600"
       delegate_to: localhost
 
-    - name: Set server URL in kubeconfig (updating from 127.0.0.1 to external IP)
-      replace:
-        path: "{{ playbook_dir }}/../k3s.yaml"
-        regexp: 'https://127.0.0.1:6443'
-        replace: "https://{{ hostvars[primary_control_node]['ansible_host'] }}:6443"
+    - name: Display local kubeconfig instructions
+      ansible.builtin.debug:
+        msg:
+          - "K3s kubeconfig has been saved and MODIFIED to {{ playbook_dir }}/../k3s.yaml"
+          - "Server address updated to: https://{{ primary_control_ip }}:6443"
+          - "To use this configuration locally, run:"
+          - "export KUBECONFIG={{ playbook_dir }}/../k3s.yaml"
+          - "kubectl get nodes  # To verify connectivity"
       delegate_to: localhost
 
-    - name: Save modified kubeconfig to ~/.kube/k3s/config
-      copy:
-        src: "{{ playbook_dir }}/../k3s.yaml"
-        dest: "~/.kube/k3s/config"
-        mode: '0600'
-        remote_src: yes
-      delegate_to: localhost
+# --- Process for MANAGEMENT NODE KUBECONFIG ---
+- name: Process MANAGEMENT NODE kubeconfig when found
   when: k3s_kubeconfig_found | bool
+  block:
+    - name: Modify fetched kubeconfig content for MANAGEMENT NODE use
+      ansible.builtin.set_fact:
+        # This is the same modification as local, just making it explicit
+        modified_kubeconfig_remote: "{{ k3s_kubeconfig_content_original | replace('https://127.0.0.1:6443', 'https://' + primary_control_ip + ':6443') }}"
 
-- name: Display kubeconfig instructions
-  debug:
-    msg:
-      - "K3s kubeconfig has been saved to {{ playbook_dir }}/../k3s.yaml"
-      - "To use this configuration, run:"
-      - "export KUBECONFIG={{ playbook_dir }}/../k3s.yaml"
-      - "kubectl get nodes  # To verify connectivity"
-      - "It has also been copied to ~/.kube/k3s/config"
-      - "You can use: export KUBECONFIG=~/.kube/k3s/config"
-  when: k3s_kubeconfig_found | bool
+    - name: Ensure .kube directory exists on management nodes
+      ansible.builtin.file:
+        path: "/root/.kube" # Assuming root user on mgmt node
+        state: directory
+        mode: "0700"
+      delegate_to: "{{ item }}" # Run this ON the management node
+      with_items: "{{ groups['k3s_management'] }}"
 
+    - name: Copy MODIFIED kubeconfig to management nodes
+      ansible.builtin.copy:
+        content: "{{ modified_kubeconfig_remote }}" # Use the MODIFIED content
+        dest: "/root/.kube/config" # Assuming root user
+        mode: "0600"
+      delegate_to: "{{ item }}" # Run this ON the management node
+      with_items: "{{ groups['k3s_management'] }}"
+
+    - name: Display management node confirmation
+      ansible.builtin.debug:
+        msg: "MODIFIED Kubeconfig deployed to management node {{ item }}. Server set to https://{{ primary_control_ip }}:6443"
+      delegate_to: "{{ item }}" # Display message for each node
+      with_items: "{{ groups['k3s_management'] }}"
+
+# --- Warning if Kubeconfig Not Found ---
 - name: Display warning if kubeconfig was not found
-  debug:
+  ansible.builtin.debug:
     msg: |
-      Warning: K3s kubeconfig was not found on {{ primary_control_node }}.
-      This could mean one of several things:
-      1. K3s is not properly installed on the control plane node
-      2. K3s is installed but not yet finished initializing
-      3. The kubeconfig file is in a different location
-      4. There may be SSH configuration issues preventing access
-      
-      Try running the following command manually to verify:
-      ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ hostvars[primary_control_node]['ansible_host'] }} 'ls -la /etc/rancher/k3s/k3s.yaml'
+      Warning: K3s kubeconfig was not found on {{ primary_control_node }} ({{ primary_control_ip }}).
+      Cannot configure kubectl automatically on local machine or management node.
+      This could mean K3s did not install/initialize correctly on the control plane.
+      Try running the control plane tasks again or check logs on {{ primary_control_node }}.
+      Manual verification command:
+      ssh {{ hostvars[primary_control_node]['ansible_user'] | default('root') }}@{{ primary_control_ip }} 'ls -la /etc/rancher/k3s/k3s.yaml'
   when: not k3s_kubeconfig_found | bool
