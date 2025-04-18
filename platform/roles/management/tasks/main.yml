@@ -1,6 +1,6 @@
 ---
 - name: Install required packages for management node
-  apt:
+  ansible.builtin.apt:
     name:
       - ansible
       - python3
@@ -19,32 +19,24 @@
 - name: Set hostname based on inventory name (if valid format)
   block:
     - name: Generate valid hostname from inventory_hostname
-      set_fact:
+      ansible.builtin.set_fact:
         valid_hostname: "{{ inventory_hostname | replace('_', '-') }}"
 
     - name: Set hostname
-      hostname:
+      ansible.builtin.hostname:
         name: "{{ valid_hostname }}"
       become: true
 
     - name: Update /etc/hosts with proper hostname
-      lineinfile:
+      ansible.builtin.lineinfile:
         path: /etc/hosts
         regexp: '^127\.0\.1\.1\s+.*$'
         line: "127.0.1.1 {{ valid_hostname }}"
         state: present
       become: true
 
-- name: Update /etc/hosts with proper hostname
-  lineinfile:
-    path: /etc/hosts
-    regexp: '^127\.0\.1\.1\s+.*$'
-    line: "127.0.1.1 {{ inventory_hostname }}"
-    state: present
-  become: true
-
 - name: Install kubectl
-  shell: |
+  ansible.builtin.shell: |
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod +x kubectl
     sudo mv kubectl /usr/local/bin/
@@ -53,21 +45,21 @@
   become: true
 
 - name: Install Helm
-  shell: |
+  ansible.builtin.shell: |
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   args:
     creates: /usr/local/bin/helm
   become: true
 
 - name: Ensure target directory exists on management node
-  file:
+  ansible.builtin.file:
     path: "~/tfgrid-k3s"
     state: directory
     mode: "0755"
 
 - name: Synchronize entire tfgrid-k3s directory to management node
-  synchronize:
-    src: "{{ playbook_dir }}/../" # Assuming playbook_dir points to roles/management/tasks
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../" # Go up two levels from roles/management/tasks to get to project root
     dest: "~/tfgrid-k3s/"
     delete: yes # Remove files that don't exist in source
     rsync_opts:
@@ -76,117 +68,60 @@
       - "--exclude=node_modules"
       - "--exclude=.terraform"
       - "--exclude=.terraform.lock.hcl"
+      - "--exclude=*.tfstate"
+      - "--exclude=*.tfstate.backup"
+      - "--exclude=state.json"
       - "--exclude=.vscode"
       - "--exclude=*.swp"
       - "--exclude=*.swo"
       - "--exclude=__pycache__"
   become: no # Typically better to run rsync as the user who will own the files
 
-- name: Find all shell scripts in tfgrid-k3s
-  find:
-    paths: "{{ ansible_env.HOME }}/tfgrid-k3s"
+- name: Find all shell scripts in tfgrid-k3s on management node
+  ansible.builtin.find:
+    paths: "{{ ansible_env.HOME }}/tfgrid-k3s/scripts" # Target only the scripts directory
     patterns: "*.sh"
     recurse: yes
   register: shell_scripts
 
 - name: Debug - show found shell scripts
-  debug:
-    msg: "Found {{ shell_scripts.files | length }} shell scripts"
-  when: shell_scripts.files | length > 0
+  ansible.builtin.debug:
+    msg: "Found {{ shell_scripts.files | length }} shell scripts in ~/tfgrid-k3s/scripts to make executable."
+  when: shell_scripts.files is defined and shell_scripts.files | length > 0
 
-- name: Set executable permissions on all shell scripts
-  file:
+- name: Set executable permissions on all shell scripts in ~/tfgrid-k3s/scripts
+  ansible.builtin.file:
     path: "{{ item.path }}"
     mode: "0755"
   with_items: "{{ shell_scripts.files }}"
-  when: shell_scripts.files | length > 0
+  when: shell_scripts.files is defined and shell_scripts.files | length > 0
 
-- name: Validate directory structure
-  shell: ls -la ~/tfgrid-k3s/
+- name: Validate directory structure after sync
+  ansible.builtin.shell: ls -la ~/tfgrid-k3s/
   register: dir_listing
   changed_when: false
 
-- name: Show directory contents
-  debug:
+- name: Show directory contents after sync
+  ansible.builtin.debug:
     var: dir_listing.stdout_lines
 
-- name: Check if kubeconfig file exists
-  stat:
-    path: "{{ playbook_dir }}/../k3s.yaml"
-  register: kubeconfig_file
-  delegate_to: localhost
-
-- name: Ensure .kube directory exists
-  file:
-    path: "~/.kube"
-    state: directory
-    mode: "0700"
-
-- name: Copy kubeconfig to management node
-  copy:
-    src: "{{ playbook_dir }}/../k3s.yaml"
-    dest: ~/.kube/config
-    mode: "0600"
-  when: kubeconfig_file.stat.exists | default(false)
-  register: kubeconfig_copied
-
-- name: Update kubeconfig server address
-  replace:
-    path: ~/.kube/config
-    regexp: "https://127.0.0.1:6443"
-    replace: 'https://{{ hostvars[primary_control_node | default("node1")]["ansible_host"] }}:6443'
-  when: kubeconfig_copied is defined and kubeconfig_copied.changed
-
-- name: Debug and fix kubeconfig
-  block:
-    - name: Check kubeconfig content
-      shell: cat ~/.kube/config
-      register: kubeconfig_content
-      changed_when: false
-      ignore_errors: true
-
-    - name: Show kubeconfig server value
-      debug:
-        msg: "Current kubeconfig server value: {{ kubeconfig_content.stdout | regex_search('server: (.+)', '\\1') | first | default('not found') }}"
-      when: kubeconfig_content.rc is defined and kubeconfig_content.rc == 0
-
-    - name: Get control node IP
-      debug:
-        msg: "Control node IP should be: {{ hostvars[primary_control_node | default('node1')]['ansible_host'] }}"
-
-    - name: Update kubeconfig server address again
-      replace:
-        path: ~/.kube/config
-        regexp: "server: https://127.0.0.1:6443"
-        replace: 'server: https://{{ hostvars[primary_control_node | default("node1")]["ansible_host"] }}:6443'
-      register: kubeconfig_updated
-      ignore_errors: true
-
-    - name: Show kubeconfig update status
-      debug:
-        msg: "Kubeconfig was {{ 'updated' if kubeconfig_updated.changed else 'already correct or not found' }}"
-  become: true
-
-- name: Display message if kubeconfig doesn't exist yet
-  debug:
-    msg: "Kubeconfig file doesn't exist yet. It will be created later in the deployment process."
-  when: not kubeconfig_file.stat.exists | default(false)
+# Removed all kubeconfig related tasks from here - handled by kubeconfig role
 
 - name: Install k9s for improved Kubernetes UX
   block:
     - name: Get latest k9s release version
-      uri:
+      ansible.builtin.uri:
         url: https://api.github.com/repos/derailed/k9s/releases/latest
         return_content: yes
       register: k9s_latest_release
       failed_when: false # Don't fail the whole playbook if GitHub API is down
 
     - name: Set k9s version (latest or fallback)
-      set_fact:
-        k9s_version: "{{ k9s_latest_release.json.tag_name | default('v0.28.0') }}"
+      ansible.builtin.set_fact:
+        k9s_version: "{{ (k9s_latest_release.json.tag_name | default('v0.28.0')) if k9s_latest_release.status == 200 else 'v0.28.0' }}" # Safer check
 
     - name: Download k9s
-      get_url:
+      ansible.builtin.get_url:
         url: "https://github.com/derailed/k9s/releases/download/{{ k9s_version }}/k9s_Linux_amd64.tar.gz"
         dest: "/tmp/k9s.tar.gz"
         mode: "0644"
@@ -197,35 +132,35 @@
       until: k9s_download is succeeded
 
     - name: Create temporary directory for k9s extraction
-      file:
+      ansible.builtin.file:
         path: /tmp/k9s_extract
         state: directory
         mode: "0755"
 
     - name: Extract k9s
-      unarchive:
+      ansible.builtin.unarchive:
         src: /tmp/k9s.tar.gz
         dest: /tmp/k9s_extract
         remote_src: yes
 
     - name: Move k9s binary to /usr/local/bin
-      copy:
+      ansible.builtin.copy:
         src: /tmp/k9s_extract/k9s
         dest: /usr/local/bin/k9s
         mode: "0755"
         remote_src: yes
 
     - name: Create k9s config directory
-      file:
-        path: ~/.config/k9s
+      ansible.builtin.file:
+        path: "~/.config/k9s" # Use ~ for user home dir
         state: directory
         mode: "0700"
 
     - name: Configure k9s with sensible defaults
-      copy:
-        dest: ~/.config/k9s/config.yml
+      ansible.builtin.copy:
+        dest: "~/.config/k9s/config.yml" # Use ~ for user home dir
         content: |
-          # K9s Configuration - Auto-generated for Kubernetes management
+          # K9s Configuration - Auto-generated
           k9s:
             refreshRate: 2
             headless: false
@@ -234,65 +169,57 @@
             logger:
               tail: 100
               buffer: 5000
-            currentContext: default
-            currentCluster: default
-            clusters:
-              default:
-                namespace:
-                  active: default
-                  favorites:
-                    - default
-                    - kube-system
-                    - ingress-nginx
-                view:
-                  active: pods
-                featureGates:
-                  nodeShell: false
-                shellPod:
-                  image: busybox:1.35.0
-                  command: []
-                  args: []
-                  namespace: default
-                  limits:
-                    cpu: 100m
-                    memory: 100Mi
+            # Let k9s use the default KUBECONFIG environment or ~/.kube/config
+            # currentContext: default
+            # currentCluster: default
+            clusters: {} # Keep empty, k9s will use default kubeconfig
         mode: "0600"
 
     - name: Clean up temporary files
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       with_items:
         - /tmp/k9s.tar.gz
         - /tmp/k9s_extract
-  become: true
+  become: true # Most steps here require root
   ignore_errors: yes # Continue with other tasks even if k9s installation fails
 
 - name: Set up unified kubectl and k9s configuration in shell profile
-  blockinfile:
-    path: "/root/.bashrc"
+  ansible.builtin.blockinfile:
+    path: "/root/.bashrc" # Assuming root user
     marker: "# {mark} KUBERNETES TOOLS CONFIGURATION"
     block: |
-      # Set up kubectl to work without manual configuration
+      # Set up kubectl to work using the config file managed by Ansible
       export KUBECONFIG=/root/.kube/config
 
       # Useful aliases
       alias k=kubectl
-      alias k9s='k9s --readonly=false --logoless'
+      alias k9s='k9s --logoless' # Removed readonly flag as it might interfere
 
-      # Display cluster info on login
-      if [ -f "$KUBECONFIG" ]; then
-        echo "Kubernetes cluster information:"
-        kubectl cluster-info 2>/dev/null || echo "Cluster not accessible yet"
-        echo ""
-        echo "Management Tools Available:"
-        echo "  - kubectl: Run 'kubectl get nodes' to see cluster nodes"
-        if command -v k9s >/dev/null 2>&1; then
-          echo "  - k9s: Run 'k9s' to launch the interactive Kubernetes TUI"
-          echo "    • Press '?' in k9s for help and keyboard shortcuts"
-          echo "    • Press 'Ctrl+A' in k9s to access command menu"
-          echo "    • Press 'Esc' to go back or exit a view"
+      # Function to display cluster info on login if available
+      display_kube_info() {
+        if [ -f "$KUBECONFIG" ] && command -v kubectl >/dev/null 2>&1; then
+          echo "--------------------------------------------------"
+          echo "Kubernetes cluster info (using $KUBECONFIG):"
+          if kubectl cluster-info > /dev/null 2>&1; then
+             kubectl cluster-info | grep 'Kubernetes control plane'
+             kubectl get nodes -o wide --no-headers=true | awk '{print "  Node:", $1, "Status:", $2, "IP:", $6}'
+          else
+             echo "Cluster not accessible or KUBECONFIG invalid."
+             echo "Attempting to connect to API server specified in config..."
+             grep 'server:' $KUBECONFIG
+          fi
+          echo "--------------------------------------------------"
+          echo "Management Tools Available:"
+          echo "  - kubectl (aliased as 'k'). Try: k get nodes"
+          if command -v k9s >/dev/null 2>&1; then
+            echo "  - k9s. Try: k9s"
+          fi
+          echo "--------------------------------------------------"
         fi
-      fi
+      }
+      # Call the function
+      display_kube_info
     create: yes
-  become: true
+  become: true # Need root to write to /root/.bashrc
