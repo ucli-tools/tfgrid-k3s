@@ -3,21 +3,22 @@
 - name: Install required packages for management node
   ansible.builtin.apt:
     name:
-      - ansible
+      - ansible # Needed to run app deployment playbooks locally on this node
       - python3
       - python3-pip
+      - git # Needed for cloning app repos/charts (e.g., tutor-k3s)
+      - curl
+      - wget
       - jq
-      - git # Ensure git is listed here
-      - curl # Needed for downloading installers
       - vim
       - nano
-      - wget # Alternative download tool
-      - wireguard
+      - wireguard # Ensures tools are present, low cost if already installed
+      # Kubectl and Helm are installed via script below for better version control
     state: present
     update_cache: yes
   become: true
 
-- name: Set hostname based on inventory name (if valid format)
+- name: Set hostname based on inventory name
   block:
     - name: Generate valid hostname from inventory_hostname
       ansible.builtin.set_fact:
@@ -38,109 +39,45 @@
 
 - name: Install kubectl
   ansible.builtin.shell: |
-    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod +x kubectl
     sudo mv kubectl /usr/local/bin/
   args:
-    creates: /usr/local/bin/kubectl
-  become: true # Needs sudo within the shell command
+    creates: /usr/local/bin/kubectl # Makes task idempotent
+  become: true
+  changed_when: false # Rely on 'creates' for change status
 
 - name: Install Helm
   ansible.builtin.shell: |
-    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   args:
-    creates: /usr/local/bin/helm
-  become: true # The script itself likely uses sudo or needs root
-
-# --- Start OpenTofu Installation Section ---
-- name: Install OpenTofu (Official Script Method)
-  block:
-    - name: Download OpenTofu installation script
-      ansible.builtin.get_url:
-        url: https://get.opentofu.org/install-opentofu.sh
-        dest: /tmp/install-opentofu.sh
-        mode: "0755" # Make executable immediately
-        timeout: 60
-      register: tofu_script_download
-      retries: 3
-      delay: 5
-      until: tofu_script_download is succeeded
-
-    - name: Run OpenTofu installer script (using deb method)
-      ansible.builtin.command:
-        cmd: /tmp/install-opentofu.sh --install-method deb
-        chdir: /tmp # Optional: run from /tmp directory
-      args:
-        creates: /usr/bin/tofu # Assumes standard deb install path
-      register: tofu_install_run
-      changed_when: tofu_install_run.rc == 0 and "Installed OpenTofu" in tofu_install_run.stdout # Basic check for change
-
-    - name: Remove OpenTofu installer script
-      ansible.builtin.file:
-        path: /tmp/install-opentofu.sh
-        state: absent
-  become: true # Installation requires root privileges
-# --- End OpenTofu Installation Section ---
-
-# --- Start Git Clone Section ---
-- name: Ensure git is installed (redundant check, good practice)
-  ansible.builtin.package:
-    name: git
-    state: present
+    creates: /usr/local/bin/helm # Makes task idempotent
   become: true
+  changed_when: false # Rely on 'creates' for change status
 
-- name: Clone or update the tfgrid-k3s repository on management node
-  ansible.builtin.git:
-    repo: "https://github.com/mik-tf/tfgrid-k3s.git" # Your repository URL
-    dest: "~/tfgrid-k3s" # Destination directory on the management node
-    version: main # Or 'master', or a specific tag/commit hash
-    force: yes # Overwrite local changes on management node to match repo version
-    accept_hostkey: yes # Automatically add github.com (or other host) key
-  become: no # Run this as the ansible user (root in your case)
-
-- name: Find all shell scripts in the cloned repo's scripts directory
-  ansible.builtin.find:
-    paths: "{{ ansible_env.HOME }}/tfgrid-k3s/scripts" # Target the scripts directory within the cloned repo
-    patterns: "*.sh"
-    recurse: yes
-  register: shell_scripts_in_repo
-
-- name: Debug - show found shell scripts after clone
-  ansible.builtin.debug:
-    msg: "Found {{ shell_scripts_in_repo.files | length }} shell scripts in cloned repo to make executable."
-  when: shell_scripts_in_repo.files is defined and shell_scripts_in_repo.files | length > 0
-
-- name: Set executable permissions on shell scripts in cloned repo
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    mode: "0755"
-  with_items: "{{ shell_scripts_in_repo.files }}"
-  when: shell_scripts_in_repo.files is defined and shell_scripts_in_repo.files | length > 0
-# --- End Git Clone Section ---
-
-# Removed all kubeconfig related tasks from here - handled by kubeconfig role
-
-- name: Install k9s for improved Kubernetes UX
+# --- Start k9s Installation Block ---
+- name: Install k9s (best effort)
   block:
-    - name: Get latest k9s release version
+    - name: Get latest k9s release version tag
       ansible.builtin.uri:
         url: https://api.github.com/repos/derailed/k9s/releases/latest
         return_content: yes
+        body_format: json
       register: k9s_latest_release
-      failed_when: false # Don't fail the whole playbook if GitHub API is down
+      failed_when: false # Do not fail playbook if GitHub API is unavailable
 
-    - name: Set k9s version (latest or fallback)
+    - name: Set k9s version fact using latest or fallback
       ansible.builtin.set_fact:
-        k9s_version: "{{ (k9s_latest_release.json.tag_name | default('v0.28.0')) if k9s_latest_release.status == 200 else 'v0.28.0' }}" # Safer check
+        k9s_version_tag: "{{ (k9s_latest_release.json.tag_name | default('v0.32.5')) if k9s_latest_release.status == 200 else 'v0.32.5' }}" # Provide a recent default
 
-    - name: Download k9s
+    - name: Download k9s archive
       ansible.builtin.get_url:
-        url: "https://github.com/derailed/k9s/releases/download/{{ k9s_version }}/k9s_Linux_amd64.tar.gz"
+        url: "https://github.com/derailed/k9s/releases/download/{{ k9s_version_tag }}/k9s_Linux_amd64.tar.gz"
         dest: "/tmp/k9s.tar.gz"
         mode: "0644"
         timeout: 60
       register: k9s_download
-      retries: 3
+      retries: 2 # Retry download briefly
       delay: 5
       until: k9s_download is succeeded
 
@@ -149,91 +86,97 @@
         path: /tmp/k9s_extract
         state: directory
         mode: "0755"
+      when: k9s_download is succeeded
 
-    - name: Extract k9s
+    - name: Extract k9s archive
       ansible.builtin.unarchive:
         src: /tmp/k9s.tar.gz
         dest: /tmp/k9s_extract
         remote_src: yes
+      when: k9s_download is succeeded # Only extract if download worked
 
     - name: Move k9s binary to /usr/local/bin
-      ansible.builtin.copy:
+      ansible.builtin.copy: # <<< USING ansible.builtin.copy
         src: /tmp/k9s_extract/k9s
         dest: /usr/local/bin/k9s
         mode: "0755"
         remote_src: yes
+      # REMOVED invalid 'args:' section with 'creates:' here
+      register: k9s_copy_result
+      when: k9s_download is succeeded # Only copy if download and extraction worked
 
-    - name: Create k9s config directory
-      ansible.builtin.file:
-        path: "~/.config/k9s" # Use ~ for user home dir
-        state: directory
-        mode: "0700"
-
-    - name: Configure k9s with sensible defaults
-      ansible.builtin.copy:
-        dest: "~/.config/k9s/config.yml" # Use ~ for user home dir
-        content: |
-          # K9s Configuration - Auto-generated
-          k9s:
-            refreshRate: 2
-            headless: false
-            readOnly: false
-            noIcons: false
-            logger:
-              tail: 100
-              buffer: 5000
-            # Let k9s use the default KUBECONFIG environment or ~/.kube/config
-            # currentContext: default
-            # currentCluster: default
-            clusters: {} # Keep empty, k9s will use default kubeconfig
-        mode: "0600"
-
-    - name: Clean up temporary files
+    - name: Clean up k9s temporary files
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       with_items:
         - /tmp/k9s.tar.gz
         - /tmp/k9s_extract
-  become: true # Most steps here require root
-  ignore_errors: yes # Continue with other tasks even if k9s installation fails
 
-- name: Set up unified kubectl and k9s configuration in shell profile
+  become: true # Most steps need root
+  ignore_errors: true # Installing k9s is non-critical, allow playbook to continue
+# --- End k9s Installation Block ---
+
+# --- Start k9s Verification Task ---
+- name: Verify k9s installation path
+  ansible.builtin.stat:
+    path: /usr/local/bin/k9s
+  register: k9s_stat_result
+
+- name: Display k9s installation status
+  ansible.builtin.debug:
+    msg: "k9s binary found at /usr/local/bin/k9s: {{ 'Yes' if k9s_stat_result.stat.exists else 'No - Installation may have failed silently (check logs)' }}"
+# --- End k9s Verification Task ---
+
+- name: Configure shell environment for Kubernetes and Ansible usage
   ansible.builtin.blockinfile:
-    path: "/root/.bashrc" # Assuming root user
-    marker: "# {mark} KUBERNETES TOOLS CONFIGURATION"
+    path: "/root/.bashrc"
+    marker: "# {mark} KUBERNETES & ANSIBLE TOOLS CONFIGURATION"
     block: |
-      # Set up kubectl to work using the config file managed by Ansible
+      # Point kubectl, helm, k9s etc. to the config managed by Ansible
       export KUBECONFIG=/root/.kube/config
 
       # Useful aliases
       alias k=kubectl
-      alias k9s='k9s --logoless' # Removed readonly flag as it might interfere
-      alias tofu='tofu' # Add alias if desired, though usually not needed if in PATH
+      alias k9s='k9s --logoless'
+      alias h=helm
+      alias ll='ls -alhF'
 
-      # Function to display cluster info on login if available
+      # Function to display cluster status on login
       display_kube_info() {
         if [ -f "$KUBECONFIG" ] && command -v kubectl >/dev/null 2>&1; then
+          local cluster_name node_info server_info
+          server_info=$(kubectl cluster-info | grep 'control plane' || echo "Kubernetes control plane: unable to connect or kubectl misconfigured")
+          node_info=$(kubectl get nodes -o wide --no-headers=true 2>/dev/null | awk '{print "  Node:", $1, $2, $6}' || echo "  Node info: unavailable")
+          cluster_name=$(kubectl config current-context 2>/dev/null || echo "unknown")
+
           echo "--------------------------------------------------"
-          echo "Kubernetes cluster info (using $KUBECONFIG):"
-          if kubectl cluster-info > /dev/null 2>&1; then
-             kubectl cluster-info | grep 'Kubernetes control plane'
-             kubectl get nodes -o wide --no-headers=true | awk '{print "  Node:", $1, "Status:", $2, "IP:", $6}'
-          else
-             echo "Cluster not accessible or KUBECONFIG invalid."
-             echo "Attempting to connect to API server specified in config..."
-             grep 'server:' $KUBECONFIG
-          fi
+          echo "Management Node Environment"
           echo "--------------------------------------------------"
-          echo "Management Tools Available:"
-          echo "  - kubectl (aliased as 'k'). Try: k get nodes"
-          if command -v k9s >/dev/null 2>&1; then
-            echo "  - k9s. Try: k9s"
+          echo "Cluster Context: ${cluster_name} (using $KUBECONFIG)"
+          echo "${server_info}"
+          echo "${node_info}"
+          echo "--------------------------------------------------"
+          echo "Available Tools: kubectl (k), helm (h), k9s, ansible, git"
+          if ! command -v k9s >/dev/null 2>&1; then
+              echo "NOTE: 'k9s' alias set, but command not found in PATH. Installation might have failed."
           fi
+          echo "Ready for cluster interaction and application deployment."
+          echo "(Clone app repos like 'tutor-k3s' and run their playbooks here)."
+          echo "--------------------------------------------------"
+        else
+          echo "--------------------------------------------------"
+          echo "Kubernetes environment not fully configured."
+          echo "  - KUBECONFIG ($KUBECONFIG) may be missing or invalid."
+          echo "  - Check if 'make platform' completed successfully."
           echo "--------------------------------------------------"
         fi
       }
-      # Call the function
-      display_kube_info
-    create: yes
-  become: true # Need root to write to /root/.bashrc
+      # Display info on interactive shells
+      if [[ $- == *i* ]] ; then
+          display_kube_info
+      fi
+      # Clean up function definition from shell environment after definition
+      unset -f display_kube_info
+    create: yes # Create .bashrc if it doesn't exist (unlikely)
+  become: true # Need privileges to write to /root/.bashrc
