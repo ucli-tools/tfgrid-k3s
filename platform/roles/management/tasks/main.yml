@@ -8,11 +8,11 @@
       - python3-pip
       - jq
       - git # Ensure git is listed here
-      - curl
+      - curl # Needed for downloading installers
       - vim
-      - wget
+      - nano
+      - wget # Alternative download tool
       - wireguard
-      # Removed rsync as it's no longer strictly needed by this role
     state: present
     update_cache: yes
   become: true
@@ -43,14 +43,44 @@
     sudo mv kubectl /usr/local/bin/
   args:
     creates: /usr/local/bin/kubectl
-  become: true
+  become: true # Needs sudo within the shell command
 
 - name: Install Helm
   ansible.builtin.shell: |
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   args:
     creates: /usr/local/bin/helm
-  become: true
+  become: true # The script itself likely uses sudo or needs root
+
+# --- Start OpenTofu Installation Section ---
+- name: Install OpenTofu (Official Script Method)
+  block:
+    - name: Download OpenTofu installation script
+      ansible.builtin.get_url:
+        url: https://get.opentofu.org/install-opentofu.sh
+        dest: /tmp/install-opentofu.sh
+        mode: "0755" # Make executable immediately
+        timeout: 60
+      register: tofu_script_download
+      retries: 3
+      delay: 5
+      until: tofu_script_download is succeeded
+
+    - name: Run OpenTofu installer script (using deb method)
+      ansible.builtin.command:
+        cmd: /tmp/install-opentofu.sh --install-method deb
+        chdir: /tmp # Optional: run from /tmp directory
+      args:
+        creates: /usr/bin/tofu # Assumes standard deb install path
+      register: tofu_install_run
+      changed_when: tofu_install_run.rc == 0 and "Installed OpenTofu" in tofu_install_run.stdout # Basic check for change
+
+    - name: Remove OpenTofu installer script
+      ansible.builtin.file:
+        path: /tmp/install-opentofu.sh
+        state: absent
+  become: true # Installation requires root privileges
+# --- End OpenTofu Installation Section ---
 
 # --- Start Git Clone Section ---
 - name: Ensure git is installed (redundant check, good practice)
@@ -179,6 +209,7 @@
       # Useful aliases
       alias k=kubectl
       alias k9s='k9s --logoless' # Removed readonly flag as it might interfere
+      alias tofu='tofu' # Add alias if desired, though usually not needed if in PATH
 
       # Function to display cluster info on login if available
       display_kube_info() {
