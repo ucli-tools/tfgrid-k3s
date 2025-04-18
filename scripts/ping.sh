@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+# Remove set -e to allow the script to handle failures and retries
+# set -e
 
 # Get script directory
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,54 +21,69 @@ CYAN='\033[0;36m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-# Define retry variables
-MAX_RETRIES=5
-RETRY_DELAY=5  # seconds
+# --- Configuration ---
+# Global script retry settings
+MAX_SCRIPT_RETRIES=10
+SCRIPT_RETRY_DELAY=30  # seconds between full script retries
 
-# Function to ping a host with retries
+# Individual host check settings (within a single script run)
+MAX_HOST_RETRIES=3     # Retries for a single host within one script attempt
+HOST_RETRY_DELAY=5     # seconds between checks for a single host
+SSH_CONNECT_TIMEOUT=10 # NEW: Increased SSH connection timeout (seconds)
+# --- End Configuration ---
+
+# Function to ping a host with retries (for a single host within a script run)
 ping_host() {
     local user=$1
     local ip=$2
     local name=$3
-    local retries=0
+    local host_retries=0 # Using a local counter for clarity
 
-    echo -n "  $name (${user}@${ip})... "
+    echo -n "  Checking $name (${user}@${ip})... " # Slightly clearer message
 
-    while [ $retries -lt $MAX_RETRIES ]; do
-        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "${user}@${ip}" "echo 'Success'" &>/dev/null; then
+    while [ $host_retries -lt $MAX_HOST_RETRIES ]; do # Use MAX_HOST_RETRIES
+        # Use the configured SSH_CONNECT_TIMEOUT
+        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$SSH_CONNECT_TIMEOUT "${user}@${ip}" "echo 'Success'" &>/dev/null; then
             echo -e "${GREEN}Success!${NC}"
-            return 0
+            return 0 # Host reachable
         else
-            retries=$((retries+1))
+            host_retries=$((host_retries+1))
 
-            if [ $retries -lt $MAX_RETRIES ]; then
-                echo -e "${YELLOW}Failed (attempt $retries/$MAX_RETRIES)${NC}"
-                echo -n "  Retrying in $RETRY_DELAY seconds... "
-                sleep $RETRY_DELAY
+            if [ $host_retries -lt $MAX_HOST_RETRIES ]; then # Check against MAX_HOST_RETRIES
+                # Clarify this is a host-level retry attempt
+                echo -e "${YELLOW}Failed (host attempt $host_retries/$MAX_HOST_RETRIES)${NC}"
+                echo -n "  Retrying $name in $HOST_RETRY_DELAY seconds... " # Use HOST_RETRY_DELAY
+                sleep $HOST_RETRY_DELAY
+                # Re-print the initial check line for clarity on retry
+                echo -n "  Checking $name (${user}@${ip})... "
             else
-                echo -e "${RED}Failed after $MAX_RETRIES attempts!${NC}"
-                return 1
+                # Failed all host-level retries for *this* script run
+                echo -e "${RED}Failed after $MAX_HOST_RETRIES attempts!${NC}" # Use MAX_HOST_RETRIES
+                return 1 # Host unreachable for this script run
             fi
         fi
     done
+    # Fallback return in case loop condition is met unexpectedly
+    return 1
 }
 
-# Initialize counters
+# Initialize global counters - THESE WILL BE RESET EACH SCRIPT ATTEMPT
 total_success=0
 total_failed=0
 
 # Function to test nodes in a specific section
+# This function modifies the global total_success and total_failed counters
 test_nodes() {
     local section=$1
     local title=$2
-    local success=0
-    local failed=0
+    local section_success=0 # Counter for this section only
+    local section_failed=0  # Counter for this section only
 
     echo -e "\n${BLUE}=== Testing $title Nodes ===${NC}"
 
-    # Extract the section
+    # Use the original inventory parsing logic
     local capture=0
-    local nodes=()
+    local nodes_lines=() # Store the raw lines matching the section
 
     while IFS= read -r line; do
         # Start capturing at section start
@@ -75,65 +91,135 @@ test_nodes() {
             capture=1
             continue
         fi
-        # Stop at next section
-        if [[ $capture -eq 1 && "$line" == \[* ]]; then
+        # Stop at next section or end of relevant block
+        if [[ $capture -eq 1 && "$line" =~ ^\s*\[ ]]; then
             capture=0
-            continue
+            # Don't 'continue' here, the line might be the start of the *next* section
         fi
-        # Capture lines with ansible_host
-        if [[ $capture -eq 1 && "$line" =~ ansible_host ]]; then
-            nodes+=("$line")
+        # Capture non-empty lines with ansible_host while capturing
+        if [[ $capture -eq 1 && "$line" =~ ansible_host ]] && [[ -n "$line" ]] && [[ ! "$line" =~ ^\s*# ]]; then
+             nodes_lines+=("$line")
         fi
     done < "$INVENTORY_FILE"
 
     # Count and display nodes found
-    local count=${#nodes[@]}
+    local count=${#nodes_lines[@]}
     if [ $count -eq 0 ]; then
-        echo -e "${YELLOW}  No nodes found in $title section${NC}"
-        return 0
+        echo -e "${YELLOW}  No nodes found in [$section] section${NC}"
+        return # Exit the function, no nodes to test
     fi
 
     echo -e "${CYAN}  Found $count $title node(s)${NC}"
 
-    # Process each node
-    for node in "${nodes[@]}"; do
-        name=$(echo "$node" | awk '{print $1}')
-        ip=$(echo "$node" | grep -o "ansible_host=[^ ]*" | cut -d= -f2)
-        user=$(echo "$node" | grep -o "ansible_user=[^ ]*" | cut -d= -f2)
+    # Process each node line found
+    for node_line in "${nodes_lines[@]}"; do
+        # Use original parsing logic
+        name=$(echo "$node_line" | awk '{print $1}')
+        # Handle potential spacing issues with grep/cut
+        ip=$(echo "$node_line" | grep -o "ansible_host=[^ ]*" | cut -d= -f2)
+        user=$(echo "$node_line" | grep -o "ansible_user=[^ ]*" | cut -d= -f2)
+
+        # Basic check if IP and User were extracted
+        if [ -z "$ip" ] || [ -z "$user" ]; then
+            echo -e "${YELLOW}  Warning: Could not parse IP or User for line: '$node_line' in section [$section]. Skipping.${NC}"
+            section_failed=$((section_failed+1))
+            total_failed=$((total_failed+1)) # Increment global counter
+            continue
+        fi
 
         if ping_host "$user" "$ip" "$name"; then
-            success=$((success+1))
-            total_success=$((total_success+1))
+            section_success=$((section_success+1))
+            total_success=$((total_success+1)) # Increment global counter
         else
-            failed=$((failed+1))
-            total_failed=$((total_failed+1))
+            section_failed=$((section_failed+1))
+            total_failed=$((total_failed+1))   # Increment global counter
         fi
     done
 
     # Section summary
-    if [ $failed -eq 0 ]; then
-        echo -e "${GREEN}  ✓ All $title nodes are reachable ($success/$count)${NC}"
+    if [ $section_failed -eq 0 ]; then
+        echo -e "${GREEN}  ✓ All $title nodes are reachable in this attempt ($section_success/$count)${NC}"
     else
-        echo -e "${RED}  ✗ Some $title nodes are unreachable ($failed/$count failed)${NC}"
+        echo -e "${RED}  ✗ Some $title nodes unreachable in this attempt ($section_failed/$count failed)${NC}"
     fi
+    # No return value needed as it modifies global counters
 }
 
-# Test each type of node
-test_nodes "k3s_management" "Management"
-test_nodes "k3s_control" "Control Plane"
-test_nodes "k3s_worker" "Worker"
 
-# Overall summary
-echo -e "\n${BLUE}=== Overall Connectivity Summary ===${NC}"
-total=$((total_success + total_failed))
-echo "Total nodes tested: $total"
-echo "Reachable nodes: $total_success"
-echo "Unreachable nodes: $total_failed"
+# --- Main Script Logic with Global Retries ---
+script_attempt=1
+overall_success=0 # Flag to track if any attempt succeeded
 
-if [ $total_failed -eq 0 ]; then
-    echo -e "${GREEN}✓ ALL NODES REACHABLE${NC}"
+while [ $script_attempt -le $MAX_SCRIPT_RETRIES ]; do
+    echo -e "\n${CYAN}<<<<< Starting Check Attempt $script_attempt / $MAX_SCRIPT_RETRIES >>>>>${NC}"
+
+    # RESET global counters for THIS attempt
+    total_success=0
+    total_failed=0
+    found_any_nodes=0 # Track if we actually tested anything
+
+    # --- Run the checks for all sections ---
+    test_nodes "k3s_management" "Management"
+    # Check if nodes were found in the previous call to update found_any_nodes
+    [ $total_success -gt 0 ] || [ $total_failed -gt 0 ] && found_any_nodes=1
+
+    test_nodes "k3s_control" "Control Plane"
+    [ $total_success -gt 0 ] || [ $total_failed -gt 0 ] && found_any_nodes=1
+
+    test_nodes "k3s_worker" "Worker"
+    [ $total_success -gt 0 ] || [ $total_failed -gt 0 ] && found_any_nodes=1
+    # --- End of checks for this attempt ---
+
+    # Overall summary for *this attempt*
+    echo -e "\n${BLUE}----- Attempt $script_attempt Summary -----${NC}"
+    total_tested_this_run=$((total_success + total_failed))
+    echo "Total nodes tested this attempt: $total_tested_this_run"
+    echo "Reachable this attempt: $total_success"
+    echo "Unreachable this attempt: $total_failed"
+
+    # Check if this attempt was successful
+    # Success means: no failures AND at least one node was tested (or no nodes found is also ok)
+    if [ $total_failed -eq 0 ]; then
+        if [ $total_tested_this_run -gt 0 ]; then
+             echo -e "${GREEN}✓ Attempt $script_attempt SUCCEEDED. All tested nodes reachable.${NC}"
+             overall_success=1
+             break # Exit the while loop, we are done!
+        else
+             # Handle case where inventory sections might be empty
+             if [ $found_any_nodes -eq 0 ]; then
+                echo -e "${YELLOW}✓ Attempt $script_attempt completed. No nodes found to test in specified sections.${NC}"
+                overall_success=1 # Consider it success if no nodes needed testing
+                break
+             else
+                 # This case shouldn't happen if found_any_nodes logic is right, but included for safety
+                 echo -e "${YELLOW}✓ Attempt $script_attempt completed. No failures, but unclear if nodes were tested.${NC}"
+                 overall_success=1
+                 break
+             fi
+        fi
+    else
+        # This attempt failed
+        echo -e "${RED}✗ Attempt $script_attempt FAILED ($total_failed/$total_tested_this_run unreachable).${NC}"
+        if [ $script_attempt -lt $MAX_SCRIPT_RETRIES ]; then
+            echo -e "${YELLOW}Retrying entire check in $SCRIPT_RETRY_DELAY seconds...${NC}"
+            sleep $SCRIPT_RETRY_DELAY
+        else
+            echo -e "${RED}Maximum script retries ($MAX_SCRIPT_RETRIES) reached.${NC}"
+        fi
+    fi
+
+    script_attempt=$((script_attempt+1))
+done
+
+# --- Final Result ---
+echo -e "\n${BLUE}====== Final Connectivity Check Result ======${NC}"
+if [ $overall_success -eq 1 ]; then
+    echo -e "${GREEN}✓ ALL CHECKS PASSED (within $MAX_SCRIPT_RETRIES attempts).${NC}"
+    # The summary from the last successful attempt was already printed inside the loop.
     exit 0
 else
-    echo -e "${RED}✗ SOME NODES ARE UNREACHABLE ($total_failed/$total)${NC}"
+    echo -e "${RED}✗ CHECK FAILED: Some nodes remained unreachable after $MAX_SCRIPT_RETRIES attempts.${NC}"
+    # Display the results from the very last attempt (which failed)
+    echo "  (Final attempt status: $total_failed/$total_tested_this_run unreachable)"
     exit 1
 fi
