@@ -1,3 +1,4 @@
+# platform/roles/management/tasks/main.yml
 ---
 - name: Install required packages for management node
   ansible.builtin.apt:
@@ -6,12 +7,12 @@
       - python3
       - python3-pip
       - jq
-      - git
+      - git # Ensure git is listed here
       - curl
       - vim
       - wget
       - wireguard
-      - rsync # Add rsync to the package list
+      # Removed rsync as it's no longer strictly needed by this role
     state: present
     update_cache: yes
   become: true
@@ -51,59 +52,41 @@
     creates: /usr/local/bin/helm
   become: true
 
-- name: Ensure target directory exists on management node
-  ansible.builtin.file:
-    path: "~/tfgrid-k3s"
-    state: directory
-    mode: "0755"
+# --- Start Git Clone Section ---
+- name: Ensure git is installed (redundant check, good practice)
+  ansible.builtin.package:
+    name: git
+    state: present
+  become: true
 
-- name: Synchronize entire tfgrid-k3s directory to management node
-  ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../" # Go up two levels from roles/management/tasks to get to project root
-    dest: "~/tfgrid-k3s/"
-    delete: yes # Remove files that don't exist in source
-    rsync_opts:
-      - "--exclude=.git"
-      - "--exclude=*.retry"
-      - "--exclude=node_modules"
-      - "--exclude=.terraform"
-      - "--exclude=.terraform.lock.hcl"
-      - "--exclude=*.tfstate"
-      - "--exclude=*.tfstate.backup"
-      - "--exclude=state.json"
-      - "--exclude=.vscode"
-      - "--exclude=*.swp"
-      - "--exclude=*.swo"
-      - "--exclude=__pycache__"
-  become: no # Typically better to run rsync as the user who will own the files
+- name: Clone or update the tfgrid-k3s repository on management node
+  ansible.builtin.git:
+    repo: "https://github.com/mik-tf/tfgrid-k3s.git" # Your repository URL
+    dest: "~/tfgrid-k3s" # Destination directory on the management node
+    version: main # Or 'master', or a specific tag/commit hash
+    force: yes # Overwrite local changes on management node to match repo version
+    accept_hostkey: yes # Automatically add github.com (or other host) key
+  become: no # Run this as the ansible user (root in your case)
 
-- name: Find all shell scripts in tfgrid-k3s on management node
+- name: Find all shell scripts in the cloned repo's scripts directory
   ansible.builtin.find:
-    paths: "{{ ansible_env.HOME }}/tfgrid-k3s/scripts" # Target only the scripts directory
+    paths: "{{ ansible_env.HOME }}/tfgrid-k3s/scripts" # Target the scripts directory within the cloned repo
     patterns: "*.sh"
     recurse: yes
-  register: shell_scripts
+  register: shell_scripts_in_repo
 
-- name: Debug - show found shell scripts
+- name: Debug - show found shell scripts after clone
   ansible.builtin.debug:
-    msg: "Found {{ shell_scripts.files | length }} shell scripts in ~/tfgrid-k3s/scripts to make executable."
-  when: shell_scripts.files is defined and shell_scripts.files | length > 0
+    msg: "Found {{ shell_scripts_in_repo.files | length }} shell scripts in cloned repo to make executable."
+  when: shell_scripts_in_repo.files is defined and shell_scripts_in_repo.files | length > 0
 
-- name: Set executable permissions on all shell scripts in ~/tfgrid-k3s/scripts
+- name: Set executable permissions on shell scripts in cloned repo
   ansible.builtin.file:
     path: "{{ item.path }}"
     mode: "0755"
-  with_items: "{{ shell_scripts.files }}"
-  when: shell_scripts.files is defined and shell_scripts.files | length > 0
-
-- name: Validate directory structure after sync
-  ansible.builtin.shell: ls -la ~/tfgrid-k3s/
-  register: dir_listing
-  changed_when: false
-
-- name: Show directory contents after sync
-  ansible.builtin.debug:
-    var: dir_listing.stdout_lines
+  with_items: "{{ shell_scripts_in_repo.files }}"
+  when: shell_scripts_in_repo.files is defined and shell_scripts_in_repo.files | length > 0
+# --- End Git Clone Section ---
 
 # Removed all kubeconfig related tasks from here - handled by kubeconfig role
 
