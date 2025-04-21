@@ -196,12 +196,11 @@
       environment:
         INSTALL_K3S_VERSION: "{{ k3s_version }}"
       register: k3s_secondary_install
-      ignore_errors: yes # Changed from no to yes
+      ignore_errors: yes
       retries: 3
       delay: 30
       until: k3s_secondary_install.rc == 0 or 'k3s is already running' in k3s_secondary_install.stderr | default('')
 
-    # REPLACED TASK: Enhanced with retries (replacing the old "Wait for K3s service" task)
     - name: Ensure K3s service is running
       systemd:
         name: k3s
@@ -212,7 +211,6 @@
       delay: 15
       until: k3s_service_result is succeeded
 
-    # NEW TASK: Added verification that node joined the cluster
     - name: Wait for node to join the cluster
       shell: |
         export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
