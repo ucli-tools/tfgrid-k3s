@@ -1,6 +1,6 @@
 # K3s Cluster Deployment on ThreeFold Grid
 
-A complete solution for deploying a K3s Kubernetes cluster on ThreeFold Grid using Terraform/OpenTofu for infrastructure provisioning and Ansible for configuration management, with a dedicated management node.
+A complete solution for deploying a K3s Kubernetes cluster on ThreeFold Grid using Terraform/OpenTofu for infrastructure provisioning and Ansible for configuration management, with a dedicated management node equipped with K9s as a terminal user interface.
 
 ## Overview
 
