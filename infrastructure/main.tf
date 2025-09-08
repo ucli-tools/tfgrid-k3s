@@ -28,7 +28,7 @@ variable "worker_disk" { type = number }
 
 variable "worker_public_ipv4" {
   type        = bool
-  default     = true
+  default     = false
   description = "Whether worker nodes should get public IPv4 addresses"
 }
 
@@ -153,7 +153,7 @@ resource "grid_deployment" "management_node" {
     cpu              = var.management_cpu
     memory           = var.management_mem
     entrypoint       = "/sbin/zinit init"
-    publicip         = false
+    publicip         = true
     mycelium_ip_seed = random_bytes.mgmt_ip_seed.hex
 
     env_vars = {

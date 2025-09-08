@@ -1,4 +1,14 @@
 ---
+- name: Configure DNS for TFGrid environment
+  copy:
+    dest: /etc/resolv.conf
+    content: |
+      # TFGrid DNS configuration - IPv6 DNS servers for internet access
+      nameserver 2001:4860:4860::8888
+      nameserver 2001:4860:4860::8844
+    mode: '0644'
+  become: true
+
 - name: Update apt cache
   apt:
     update_cache: yes
