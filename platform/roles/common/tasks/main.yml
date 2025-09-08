@@ -3,9 +3,13 @@
   copy:
     dest: /etc/resolv.conf
     content: |
-      # TFGrid DNS configuration - IPv6 DNS servers for internet access
+      # TFGrid DNS configuration - IPv6 preferred, IPv4 fallback
+      # IPv6 DNS servers (primary for TFGrid)
       nameserver 2001:4860:4860::8888
       nameserver 2001:4860:4860::8844
+      # IPv4 DNS servers (fallback for IPv4-only networks)
+      nameserver 8.8.8.8
+      nameserver 8.8.4.4
     mode: '0644'
   become: true
 
