@@ -153,7 +153,7 @@ resource "grid_deployment" "management_node" {
     cpu              = var.management_cpu
     memory           = var.management_mem
     entrypoint       = "/sbin/zinit init"
-    publicip         = true
+    publicip         = false
     mycelium_ip_seed = random_bytes.mgmt_ip_seed.hex
 
     env_vars = {
