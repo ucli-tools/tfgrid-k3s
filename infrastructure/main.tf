@@ -28,7 +28,7 @@ variable "worker_disk" { type = number }
 
 variable "worker_public_ipv4" {
   type        = bool
-  default     = false
+  default     = true
   description = "Whether worker nodes should get public IPv4 addresses"
 }
 
