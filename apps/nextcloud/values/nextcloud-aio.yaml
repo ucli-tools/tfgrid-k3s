@@ -1,0 +1,133 @@
+# Nextcloud All-in-One Helm Values for HA Deployment
+image:
+  repository: nextcloud/all-in-one
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nextcloud:
+  host: ${NEXTCLOUD_DOMAIN}
+  username: admin
+  password: "" # Will be auto-generated
+
+  configs:
+    overwrite.cli.url: "https://${NEXTCLOUD_DOMAIN}"
+    trusted_domains: "${NEXTCLOUD_DOMAIN}"
+    trusted_proxies: "10.0.0.0/8"
+    overwriteprotocol: https
+    default_phone_region: US
+
+  mail:
+    enabled: true
+    fromAddress: noreply
+    domain: ${NEXTCLOUD_DOMAIN}
+    smtp:
+      secure: ssl
+      port: 465
+      authtype: LOGIN
+
+persistence:
+  enabled: true
+  existingClaim: nextcloud-data
+
+postgresql:
+  enabled: true
+  auth:
+    database: nextcloud
+    username: nextcloud
+  primary:
+    persistence:
+      enabled: true
+      existingClaim: nextcloud-db
+      size: ${NEXTCLOUD_DB_SIZE}Gi
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+  master:
+    persistence:
+      enabled: true
+      existingClaim: nextcloud-redis
+      size: ${NEXTCLOUD_REDIS_SIZE}Gi
+
+# High Availability Settings for 3Master/3Worker
+replicaCount: 1
+
+# Resource allocation optimized for HA
+resources:
+  limits:
+    cpu: 4
+    memory: 8Gi
+  requests:
+    cpu: 2
+    memory: 4Gi
+
+# Nextcloud apps to enable
+apps:
+  enabled:
+    - admin_audit
+    - bruteforcesettings
+    - calendar
+    - contacts
+    - deck
+    - files_external
+    - files_pdfviewer
+    - files_rightclick
+    - files_versions
+    - files_trashbin
+    - mail
+    - notes
+    - notifications
+    - password_policy
+    - photos
+    - richdocuments
+    - spreed
+    - tasks
+    - text
+    - twofactor_totp
+    - user_ldap
+    - viewer
+
+# Monitoring and metrics
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+
+# Backup configuration
+cronjob:
+  enabled: true
+
+# Security settings
+securityContext:
+  runAsUser: 33
+  runAsGroup: 33
+  fsGroup: 33
+
+# Pod disruption budget for HA
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Affinity settings for HA distribution
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - nextcloud
+        topologyKey: kubernetes.io/hostname
+
+# Tolerations for HA deployment
+tolerations:
+- key: "node-role.kubernetes.io/master"
+  operator: "Exists"
+  effect: "NoSchedule"
+- key: "node-role.kubernetes.io/control-plane"
+  operator: "Exists"
+  effect: "NoSchedule"

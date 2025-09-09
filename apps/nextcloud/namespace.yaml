@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nextcloud
+  labels:
+    name: nextcloud
+    app.kubernetes.io/name: nextcloud
+    app.kubernetes.io/component: nextcloud-aio
+    app.kubernetes.io/part-of: tfgrid-k3s-apps
