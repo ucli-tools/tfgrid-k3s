@@ -1,0 +1,26 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: nextcloud-external-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  # These will be dynamically populated based on worker public IPs
+  # Format: - WORKER_PUBLIC_IP/32
+  # Example:
+  # - 185.206.122.1/32
+  # - 185.206.122.2/32
+  # - 185.206.122.3/32
+  - ${WORKER_PUBLIC_IP_1}/32
+  - ${WORKER_PUBLIC_IP_2}/32
+  - ${WORKER_PUBLIC_IP_3}/32
+  autoAssign: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: nextcloud-external-advertisement
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - nextcloud-external-pool

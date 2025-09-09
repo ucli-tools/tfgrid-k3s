@@ -89,7 +89,19 @@ deploy_nextcloud() {
     # Step 1: Create namespace
     deploy_on_management "${SCRIPT_DIR}/namespace.yaml" "Nextcloud namespace"
 
-    # Step 2: Deploy cert-manager if not present
+    # Step 2: Install MetalLB for load balancing (no-SPOF)
+    log_info "Installing MetalLB for multi-IP load balancing..."
+    ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "
+        # Install MetalLB
+        kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.7/config/manifests/metallb-native.yaml >/dev/null 2>&1
+
+        # Wait for MetalLB to be ready
+        echo 'Waiting for MetalLB to be ready...'
+        kubectl wait --for=condition=available --timeout=300s deployment/controller -n metallb-system >/dev/null 2>&1
+    "
+    log_success "MetalLB installed for no-SPOF load balancing"
+
+    # Step 3: Deploy cert-manager if not present
     log_info "Checking cert-manager installation..."
     if ! ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "kubectl get deployment -n cert-manager cert-manager >/dev/null 2>&1"; then
         log_info "Installing cert-manager..."
@@ -103,16 +115,21 @@ deploy_nextcloud() {
         log_success "cert-manager already installed"
     fi
 
-    # Step 3: Deploy storage configuration
+    # Step 4: Configure MetalLB IP pools for no-SPOF
+    log_info "Configuring MetalLB IP pools for multi-IP load balancing..."
+    envsubst < "${SCRIPT_DIR}/metallb/ipaddresspool.yaml" | ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "kubectl apply -f - >/dev/null 2>&1"
+    log_success "MetalLB IP pools configured for no-SPOF"
+
+    # Step 5: Deploy storage configuration
     deploy_on_management "${SCRIPT_DIR}/storage/storageclass.yaml" "StorageClass"
     envsubst < "${SCRIPT_DIR}/storage/pvcs.yaml" | ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "kubectl apply -f - >/dev/null 2>&1"
     log_success "Storage configuration deployed"
 
-    # Step 4: Deploy ingress configuration
+    # Step 6: Deploy ingress configuration
     envsubst < "${SCRIPT_DIR}/ingress/ingress.yaml" | ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "kubectl apply -f - >/dev/null 2>&1"
     log_success "Ingress configuration deployed"
 
-    # Step 5: Deploy Nextcloud AIO using Helm
+    # Step 7: Deploy Nextcloud AIO using Helm
     log_info "Deploying Nextcloud AIO..."
     ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "
         # Add Nextcloud AIO Helm repository
@@ -138,14 +155,14 @@ EOF
         exit 1
     fi
 
-    # Step 6: Wait for deployment to be ready
+    # Step 8: Wait for deployment to be ready
     log_info "Waiting for Nextcloud to be fully ready..."
     ssh -o StrictHostKeyChecking=no root@${MGMT_HOST} "
         kubectl wait --for=condition=available --timeout=600s \\
             deployment/nextcloud-aio -n nextcloud >/dev/null 2>&1
     "
 
-    # Step 7: Get admin credentials
+    # Step 9: Get admin credentials
     log_success "=== Nextcloud Deployment Complete ==="
     echo ""
     log_info "Nextcloud Access Information:"

@@ -18,6 +18,9 @@ metadata:
     nginx.ingress.kubernetes.io/configuration-snippet: |
       client_max_body_size 10G;
       proxy_request_buffering off;
+    # MetalLB load balancer annotations for multi-IP HA
+    metallb.universe.tf/address-pool: nextcloud-external-pool
+    metallb.universe.tf/loadBalancerIPs: ${WORKER_PUBLIC_IPS}
 spec:
   tls:
   - hosts:
