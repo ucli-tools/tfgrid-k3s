@@ -63,11 +63,44 @@ Modify `values/nextcloud-aio.yaml` to customize:
 
 ## High Availability Features
 
-### 3Master/3Worker Support
-- **Anti-affinity rules**: Ensures pods distribute across nodes
+### Dynamic X Master/Y Worker Support
+The Nextcloud deployment automatically adapts to your cluster configuration:
+
+- **Automatic Detection**: Detects actual number of masters and workers from `platform/inventory.ini`
+- **Dynamic Resource Allocation**: Calculates optimal CPU/memory based on cluster size
+- **Adaptive HA Settings**: Enables/disables features based on cluster capabilities
+- **Anti-affinity rules**: Ensures pods distribute across available nodes
 - **Pod disruption budget**: Maintains availability during updates
-- **Resource optimization**: Scaled for multi-node deployment
 - **Load balancing**: NGINX ingress with session persistence
+
+### Cluster Size Examples
+
+#### Small Cluster (1 Master + 2 Workers)
+```bash
+# Configuration automatically detected
+Control Nodes: 1
+Worker Nodes: 2
+HA Mode: Basic
+Resources: Conservative allocation
+```
+
+#### Medium Cluster (3 Masters + 3 Workers)
+```bash
+# Configuration automatically detected
+Control Nodes: 3
+Worker Nodes: 3
+HA Mode: Full
+Resources: Balanced allocation
+```
+
+#### Large Cluster (5 Masters + 7 Workers)
+```bash
+# Configuration automatically detected
+Control Nodes: 5
+Worker Nodes: 7
+HA Mode: Enterprise
+Resources: High-performance allocation
+```
 
 ### Storage
 - **Distributed PVCs**: Data spread across worker nodes

@@ -50,17 +50,17 @@ redis:
       existingClaim: nextcloud-redis
       size: ${NEXTCLOUD_REDIS_SIZE}Gi
 
-# High Availability Settings for 3Master/3Worker
-replicaCount: 1
+# High Availability Settings - Dynamically configured based on cluster size
+replicaCount: ${NEXTCLOUD_REPLICA_COUNT:-1}
 
-# Resource allocation optimized for HA
+# Resource allocation - Dynamically calculated based on cluster resources
 resources:
   limits:
-    cpu: 4
-    memory: 8Gi
+    cpu: ${NEXTCLOUD_CPU_LIMITS:-4}
+    memory: ${NEXTCLOUD_MEM_LIMITS:-8192}Mi
   requests:
-    cpu: 2
-    memory: 4Gi
+    cpu: ${NEXTCLOUD_CPU_REQUESTS:-2}
+    memory: ${NEXTCLOUD_MEM_REQUESTS:-4096}Mi
 
 # Nextcloud apps to enable
 apps:
@@ -104,12 +104,12 @@ securityContext:
   runAsGroup: 33
   fsGroup: 33
 
-# Pod disruption budget for HA
+# Pod disruption budget for HA - dynamically configured
 podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
+  enabled: ${NEXTCLOUD_HA_ENABLED:-true}
+  minAvailable: ${NEXTCLOUD_PDB_MIN_AVAILABLE:-1}
 
-# Affinity settings for HA distribution
+# Affinity settings for HA distribution - conditionally enabled
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
