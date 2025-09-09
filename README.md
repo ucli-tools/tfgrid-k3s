@@ -55,6 +55,12 @@ The management node lives within the same private network as your cluster nodes,
    set +o history
    export TF_VAR_mnemonic="your_actual_mnemonic_phrase"
    set -o history
+
+   # Alternative: Read from file (recommended)
+   export TF_VAR_mnemonic="$(cat ~/.config/threefold/mnemonic)"
+
+   # Or inline with deployment:
+   TF_VAR_mnemonic="$(cat ~/.config/threefold/mnemonic)" make infrastructure
    ```
 
    See `docs/security.md` for more details on secure credential handling.
@@ -70,7 +76,7 @@ The management node lives within the same private network as your cluster nodes,
    # Or deploy step by step:
    make infrastructure   # Deploy ThreeFold Grid VMs
    make platform         # Configure K3s on the infrastructure
-   make app              # Deploy applications on the K3s cluster
+   make app nextcloud    # Deploy Nextcloud with HA
    ```
 
    > **Tip**: Run `make help` to see all available make commands
@@ -106,6 +112,53 @@ Runs `scripts/platform.sh`, which:
 Runs `scripts/app.sh`, which:
 - Verifies the cluster is ready
 - Deploys your applications (customizable)
+
+#### Nextcloud HA Deployment (`make app nextcloud`)
+
+For production-grade Nextcloud deployment with **no single point of failure**:
+
+**Features:**
+- ✅ **DNS Round-Robin Load Balancing** across multiple public IPs
+- ✅ **MetalLB IP Advertisement** for seamless IP management
+- ✅ **Automatic SSL Certificates** via cert-manager + Let's Encrypt
+- ✅ **Dynamic X Master/Y Worker Support** (adapts to any cluster size)
+- ✅ **Enterprise HA Configuration** with PostgreSQL + Redis
+- ✅ **Automated Backups** with point-in-time recovery
+
+**Quick Deployment:**
+```bash
+# Deploy Nextcloud with HA
+make app nextcloud
+
+# Alternative direct deployment
+make nextcloud
+```
+
+**Post-Deployment:**
+```bash
+# Check status
+make nextcloud-status
+
+# Create backup
+make nextcloud-backup
+
+# Access Nextcloud
+# URL: https://your-domain.com (from nextcloud_domain variable)
+# Admin: admin / [password shown during deployment]
+```
+
+**DNS Round-Robin Setup (No-SPOF):**
+1. Deploy with `worker_public_ipv4 = true`
+2. Get worker public IPs from deployment output
+3. Create multiple DNS A records:
+   ```
+   nextcloud.yourdomain.com → PUBLIC_IP_WORKER_1
+   nextcloud.yourdomain.com → PUBLIC_IP_WORKER_2
+   nextcloud.yourdomain.com → PUBLIC_IP_WORKER_3
+   ```
+4. MetalLB automatically handles IP advertisement
+
+See `docs/nextcloud/dns-round-robin-setup.md` for detailed instructions.
 
 ## Using the Management Node
 
@@ -182,19 +235,51 @@ tfgrid_k3s/
 │   │   ├── management/ # Management node configuration
 │   │   └── kubeconfig/# kubectl configuration
 │   └── site.yml       # Main deployment playbook
+├── apps/              # Application deployments
+│   └── nextcloud/     # Nextcloud HA deployment
+│       ├── deploy.sh  # Nextcloud deployment script
+│       ├── backup.sh  # Backup and restore operations
+│       ├── namespace.yaml
+│       ├── storage/   # Storage configuration
+│       ├── ingress/   # SSL and load balancing
+│       ├── metallb/   # MetalLB for no-SPOF IP management
+│       └── values/    # Helm chart customizations
 ├── scripts/           # Deployment and utility scripts
 │   ├── infrastructure.sh # Script to deploy infrastructure
 │   ├── platform.sh    # Script to deploy platform
-│   ├── app.sh         # Script to deploy applications
+│   ├── app.sh         # Application dispatcher script
+│   ├── nextcloud-config.sh # Nextcloud configuration
 │   ├── cleantf.sh     # Script to clean Terraform/OpenTofu state
 │   ├── ping.sh        # Connectivity test utility
 │   └── wg.sh          # WireGuard setup script
 ├── Makefile           # Main interface for all deployment commands
 └── docs/              # Additional documentation
     ├── security.md    # Security best practices documentation
-    └── troubleshooting.md # Solutions to common issues
-    └── k9s.md         # K9s documentation
+    ├── troubleshooting.md # Solutions to common issues
+    ├── k9s.md         # K9s documentation
+    └── nextcloud/     # Nextcloud-specific documentation
+        ├── plan.md    # Implementation plan
+        └── dns-round-robin-setup.md # No-SPOF setup guide
 ```
+
+## Network Configuration
+
+### ThreeFold Grid Networks
+
+You can deploy to different ThreeFold Grid networks:
+
+```bash
+# Production network (default)
+export TF_VAR_network="main"
+
+# Test network
+export TF_VAR_network="test"
+
+# Development network
+export TF_VAR_network="dev"
+```
+
+**Note:** Add this to your `credentials.auto.tfvars` file or export as environment variable before running `make infrastructure`.
 
 ## Infrastructure Configuration
 
