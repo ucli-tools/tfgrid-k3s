@@ -1,0 +1,17 @@
+##############################################################
+# Nextcloud Application Configuration
+# These variables are used by the Nextcloud deployment scripts
+# They are NOT Terraform variables but application configuration
+##############################################################
+
+# Nextcloud domain and admin settings
+nextcloud_domain = "nextcloud.yourdomain.com"  # Replace with your actual domain
+nextcloud_admin_email = "admin@yourdomain.com"  # Replace with admin email for SSL
+
+# Storage configuration (in GB)
+nextcloud_storage_size = 100   # Nextcloud data storage (100-500GB recommended)
+nextcloud_db_size = 20         # PostgreSQL database storage
+nextcloud_redis_size = 5       # Redis cache storage
+
+# Backup configuration
+nextcloud_backup_retention = 7  # Days to keep backups (default: 7)

@@ -143,8 +143,12 @@ make nextcloud-status
 make nextcloud-backup
 
 # Access Nextcloud
-# URL: https://your-domain.com (from nextcloud_domain variable)
+# URL: https://your-domain.com (from apps/nextcloud/config.tfvars)
 # Admin: admin / [password shown during deployment]
+
+# Configuration Setup:
+# cp apps/nextcloud/config.tfvars.example apps/nextcloud/config.tfvars
+# nano apps/nextcloud/config.tfvars
 ```
 
 **DNS Round-Robin Setup (No-SPOF):**
@@ -237,13 +241,15 @@ tfgrid_k3s/
 │   └── site.yml       # Main deployment playbook
 ├── apps/              # Application deployments
 │   └── nextcloud/     # Nextcloud HA deployment
-│       ├── deploy.sh  # Nextcloud deployment script
-│       ├── backup.sh  # Backup and restore operations
+│       ├── config.tfvars.example  # Nextcloud configuration template
+│       ├── config.tfvars          # Nextcloud configuration variables
+│       ├── deploy.sh              # Nextcloud deployment script
+│       ├── backup.sh              # Backup and restore operations
 │       ├── namespace.yaml
-│       ├── storage/   # Storage configuration
-│       ├── ingress/   # SSL and load balancing
-│       ├── metallb/   # MetalLB for no-SPOF IP management
-│       └── values/    # Helm chart customizations
+│       ├── storage/               # Storage configuration
+│       ├── ingress/               # SSL and load balancing
+│       ├── metallb/               # MetalLB for no-SPOF IP management
+│       └── values/                # Helm chart customizations
 ├── scripts/           # Deployment and utility scripts
 │   ├── infrastructure.sh # Script to deploy infrastructure
 │   ├── platform.sh    # Script to deploy platform
@@ -284,6 +290,60 @@ export TF_VAR_network="dev"
 ## Infrastructure Configuration
 
 In your `credentials.auto.tfvars` file, you can configure:
+
+```
+# Management node specifications (defaults if not specified)
+# management_cpu = 1      # 1 vCPU
+# management_mem = 2048   # 2GB RAM
+# management_disk = 25    # 25GB storage
+
+# Optional: Set to false to deploy worker nodes without public IPv4 addresses
+# worker_public_ipv4 = true  # Default is true
+
+# Node IDs from ThreeFold Grid
+control_nodes = [1000, 1001, 1002]  # Control plane node IDs
+worker_nodes = [2000, 2001, 2002]   # Worker node IDs
+management_node = 3000              # Management node ID
+
+# Control plane node specifications
+control_cpu = 4
+control_mem = 8192   # 8GB RAM
+control_disk = 100   # 100GB storage
+
+# Worker node specifications
+worker_cpu = 8
+worker_mem = 16384   # 16GB RAM
+worker_disk = 250    # 250GB storage
+```
+
+## Nextcloud Application Configuration
+
+Configure Nextcloud in `apps/nextcloud/config.tfvars`:
+
+```bash
+# Copy the example configuration
+cp apps/nextcloud/config.tfvars.example apps/nextcloud/config.tfvars
+
+# Edit the configuration
+nano apps/nextcloud/config.tfvars
+```
+
+Configuration options:
+```
+# Nextcloud domain and admin settings
+nextcloud_domain = "nextcloud.yourdomain.com"  # Replace with your actual domain
+nextcloud_admin_email = "admin@yourdomain.com"  # Replace with admin email for SSL
+
+# Storage configuration (in GB)
+nextcloud_storage_size = 100   # Nextcloud data storage (100-500GB recommended)
+nextcloud_db_size = 20         # PostgreSQL database storage
+nextcloud_redis_size = 5       # Redis cache storage
+
+# Backup configuration
+nextcloud_backup_retention = 7  # Days to keep backups (default: 7)
+```
+
+**Note:** These are application configuration variables, not Terraform variables. They are read by the Nextcloud deployment scripts.
 
 ```
 # Management node specifications (defaults if not specified)

@@ -8,7 +8,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PLATFORM_DIR="${REPO_ROOT}/platform"
 
-# Default configuration values
+# Load configuration from apps/nextcloud/config.tfvars if it exists
+NEXTCLOUD_CONFIG="${REPO_ROOT}/apps/nextcloud/config.tfvars"
+if [ -f "$NEXTCLOUD_CONFIG" ]; then
+    # Source the configuration file (convert HCL to bash variables)
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ $key =~ ^[[:space:]]*# ]] && continue
+        [[ -z $key ]] && continue
+
+        # Remove quotes and spaces
+        key=$(echo "$key" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+        value=$(echo "$value" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | sed 's/^"//' | sed 's/"$//')
+
+        # Export as environment variable (convert to uppercase and replace special chars)
+        env_key=$(echo "$key" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9_]/_/g')
+        export "$env_key"="$value"
+    done < "$NEXTCLOUD_CONFIG"
+fi
+
+# Default configuration values (fallback if not set in config file)
 export NEXTCLOUD_DOMAIN="${NEXTCLOUD_DOMAIN:-nextcloud.example.com}"
 export NEXTCLOUD_ADMIN_EMAIL="${NEXTCLOUD_ADMIN_EMAIL:-admin@example.com}"
 export NEXTCLOUD_STORAGE_SIZE="${NEXTCLOUD_STORAGE_SIZE:-100}"
@@ -92,13 +111,13 @@ configure_ha_settings() {
 # Check for required environment variables
 if [ -z "$NEXTCLOUD_DOMAIN" ]; then
   echo "Error: NEXTCLOUD_DOMAIN environment variable is not set"
-  echo "Please set it in infrastructure/credentials.auto.tfvars or export it"
+  echo "Please set it in apps/nextcloud/config.tfvars or export it"
   exit 1
 fi
 
 if [ -z "$NEXTCLOUD_ADMIN_EMAIL" ]; then
   echo "Error: NEXTCLOUD_ADMIN_EMAIL environment variable is not set"
-  echo "Please set it in infrastructure/credentials.auto.tfvars or export it"
+  echo "Please set it in apps/nextcloud/config.tfvars or export it"
   exit 1
 fi
 
