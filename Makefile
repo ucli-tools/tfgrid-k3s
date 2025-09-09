@@ -1,7 +1,7 @@
 .PHONY: all infrastructure platform app clean wireguard dns ping help permissions connect nextcloud nextcloud-backup nextcloud-restore nextcloud-status clean-nextcloud
 
 # Default target
-all: infrastructure platform app
+all: infrastructure platform nextcloud
 
 # Deploy infrastructure only (ThreeFold Grid VMs)
 infrastructure:
@@ -65,7 +65,7 @@ clean-nextcloud:
 # Help information
 help:
 	@echo "TFGrid K3s Makefile Targets:"
-	@echo "  make                - Run the complete deployment (infrastructure + platform + app)"
+	@echo "  make                - Run the complete deployment (infrastructure + platform + nextcloud)"
 	@echo "  make all            - Same as 'make'"
 	@echo "  make infrastructure - Deploy only ThreeFold Grid infrastructure"
 	@echo "  make platform       - Deploy only K3s platform on existing infrastructure"

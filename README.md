@@ -76,7 +76,7 @@ The management node lives within the same private network as your cluster nodes,
    # Or deploy step by step:
    make infrastructure   # Deploy ThreeFold Grid VMs
    make platform         # Configure K3s on the infrastructure
-   make app nextcloud    # Deploy Nextcloud with HA
+   make nextcloud        # Deploy Nextcloud with HA
    ```
 
    > **Tip**: Run `make help` to see all available make commands
