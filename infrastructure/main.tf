@@ -51,13 +51,21 @@ variable "management_disk" {
 provider "grid" {
   mnemonic  = var.mnemonic
   network   = var.tfgrid_network
-  relay_url = "wss://relay.grid.tf"
+  relay_url = local.relay_url
 }
 
 # Generate unique mycelium keys/seeds for all nodes
 locals {
   cluster_nodes = concat(var.control_nodes, var.worker_nodes)
   all_nodes     = concat([var.management_node], local.cluster_nodes)
+
+  # Dynamic relay URL based on network
+  relay_url = (
+    var.tfgrid_network == "main" ? "wss://relay.grid.tf" :
+    var.tfgrid_network == "test" ? "wss://relay.test.grid.tf" :
+    var.tfgrid_network == "dev"  ? "wss://relay.dev.grid.tf" :
+    "wss://relay.grid.tf"  # Default fallback
+  )
 }
 
 resource "random_bytes" "k3s_mycelium_key" {

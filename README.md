@@ -285,7 +285,10 @@ export TF_VAR_network="test"
 export TF_VAR_network="dev"
 ```
 
-**Note:** Add this to your `credentials.auto.tfvars` file or export as environment variable before running `make infrastructure`.
+**Note:** Add this to your `credentials.auto.tfvars` file or export as environment variable before running `make infrastructure`. The relay URL is automatically configured based on the network:
+- **main**: `wss://relay.grid.tf`
+- **test**: `wss://relay.test.grid.tf`
+- **dev**: `wss://relay.dev.grid.tf`
 
 ## Infrastructure Configuration
 
