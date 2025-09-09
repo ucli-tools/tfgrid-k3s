@@ -25,6 +25,7 @@ variable "control_disk" { type = number }
 variable "worker_cpu" { type = number }
 variable "worker_mem" { type = number }
 variable "worker_disk" { type = number }
+variable "tfgrid_network" { type = string }
 
 variable "worker_public_ipv4" {
   type        = bool
@@ -49,7 +50,7 @@ variable "management_disk" {
 
 provider "grid" {
   mnemonic  = var.mnemonic
-  network   = "main"
+  network   = var.tfgrid_network
   relay_url = "wss://relay.grid.tf"
 }
 
