@@ -63,17 +63,22 @@ The management node lives within the same private network as your cluster nodes,
 
 3. Deploy the cluster:
 
-   ```bash
-   # Deploy everything in one go (infrastructure, platform, applications)
-   make
+    ```bash
+    # Complete deployment (infrastructure, platform, applications)
+    make deploy
 
-   # Or deploy step by step:
-   make infrastructure   # Deploy ThreeFold Grid VMs
-   make platform         # Configure K3s on the infrastructure
-   make app              # Deploy applications on the K3s cluster
-   ```
+    # Or deploy step by step:
+    make infrastructure   # Deploy ThreeFold Grid VMs
+    make inventory        # Generate Ansible inventory
+    make wg               # Setup WireGuard connection
+    make platform         # Configure K3s on the infrastructure
+    make app              # Deploy applications on the K3s cluster
 
-   > **Tip**: Run `make help` to see all available make commands
+    # Quick redeployment (assumes infrastructure exists)
+    make quick
+    ```
+
+    > **Tip**: Run `make help` to see all available commands
 
 3. Configure network connectivity (optional):
    ```bash
@@ -167,15 +172,29 @@ The management node has all necessary tools pre-installed:
 ## Additional Management Commands
 
 ```bash
+# Show cluster node addresses and access information
+make address
+
 # Check connectivity to all nodes
 make ping
+
+# Connect to the management node
+make connect
+
+# Connect to management node and launch K9s TUI
+make k9s
 
 # Verify cluster permissions
 make permissions
 
+# Configure DNS settings
+make dns
+
 # Clean up deployment resources
 make clean
 ```
+
+Run `make help` for a complete list of available commands.
 
 ## Project Structure
 
