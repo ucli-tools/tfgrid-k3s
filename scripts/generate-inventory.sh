@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Get script directory
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-DEPLOYMENT_DIR="$SCRIPT_DIR/../infrastructure"
-OUTPUT_FILE="$SCRIPT_DIR/../platform/inventory.ini"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DEPLOYMENT_DIR="$PROJECT_ROOT/infrastructure"
+OUTPUT_FILE="$PROJECT_ROOT/platform/inventory.ini"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,6 +31,21 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Load environment configuration
+load_env_config() {
+    # Load .env file if it exists
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        log_info "Loading configuration from .env file..."
+        set -a
+        source "$PROJECT_ROOT/.env"
+        set +a
+    else
+        log_warning ".env file not found, using defaults"
+        # Set default values
+        MAIN_NETWORK="${MAIN_NETWORK:-wireguard}"
+    fi
+}
+
 # Check dependencies
 command -v jq >/dev/null 2>&1 || {
     log_error "jq required but not found. Install with:"
@@ -51,12 +67,35 @@ fi
 
 log_info "Generating inventory from Terraform outputs..."
 
+# Load environment configuration
+load_env_config
+
 # Get Terraform outputs
 terraform_output=$(tofu -chdir="$DEPLOYMENT_DIR" show -json)
 
 # Extract node information
-management_ip=$(echo "$terraform_output" | jq -r '.values.outputs.management_node_wireguard_ip.value // empty')
+management_wireguard_ip=$(echo "$terraform_output" | jq -r '.values.outputs.management_node_wireguard_ip.value // empty')
+management_mycelium_ip=$(echo "$terraform_output" | jq -r '.values.outputs.management_mycelium_ip.value // empty')
 wireguard_ips=$(echo "$terraform_output" | jq -r '.values.outputs.wireguard_ips.value // {}')
+mycelium_ips=$(echo "$terraform_output" | jq -r '.values.outputs.mycelium_ips.value // {}')
+
+# Choose which IPs to use for Ansible connectivity
+case "${MAIN_NETWORK:-wireguard}" in
+    "wireguard")
+        management_ip="$management_wireguard_ip"
+        node_ips="$wireguard_ips"
+        log_info "Using WireGuard IPs for Ansible connectivity"
+        ;;
+    "mycelium")
+        management_ip="$management_mycelium_ip"
+        node_ips="$mycelium_ips"
+        log_info "Using Mycelium IPs for Ansible connectivity"
+        ;;
+    *)
+        log_error "Invalid MAIN_NETWORK: ${MAIN_NETWORK}. Use 'wireguard' or 'mycelium'"
+        exit 1
+        ;;
+esac
 
 # Validate we have the required information
 if [ -z "$management_ip" ]; then
@@ -95,6 +134,7 @@ log_info "Detected configuration: 1 management + $control_count control + $worke
 cat > "$OUTPUT_FILE" << EOF
 # TFGrid K3s Cluster Ansible Inventory
 # Generated on $(date)
+# Network: ${MAIN_NETWORK:-wireguard}
 # Configuration: 1 management + ${control_count} control + ${worker_count} worker nodes
 
 # Management Nodes
@@ -105,9 +145,9 @@ mgmt_host ansible_host=${management_ip} ansible_user=root ansible_ssh_common_arg
 [k3s_control]
 EOF
 
-# Add control plane nodes (first N nodes from wireguard_ips)
+# Add control plane nodes (first N nodes from node_ips)
 control_idx=0
-echo "$wireguard_ips" | jq -r 'to_entries | sort_by(.key) | .[] | select(.key | test("node_\\d+")) | .key + " " + .value' | \
+echo "$node_ips" | jq -r 'to_entries | sort_by(.key) | .[] | select(.key | test("node_\\d+")) | .key + " " + .value' | \
 while read -r key ip; do
     if [ $control_idx -lt $control_count ]; then
         node_num=$((control_idx + 1))
@@ -123,9 +163,9 @@ cat >> "$OUTPUT_FILE" << EOF
 [k3s_worker]
 EOF
 
-# Add worker nodes (remaining nodes from wireguard_ips)
+# Add worker nodes (remaining nodes from node_ips)
 worker_idx=0
-echo "$wireguard_ips" | jq -r 'to_entries | sort_by(.key) | .[] | select(.key | test("node_\\d+")) | .key + " " + .value' | \
+echo "$node_ips" | jq -r 'to_entries | sort_by(.key) | .[] | select(.key | test("node_\\d+")) | .key + " " + .value' | \
 while read -r key ip; do
     if [ $worker_idx -ge $control_count ] && [ $worker_idx -lt $((control_count + worker_count)) ]; then
         node_num=$((worker_idx + 1))
@@ -151,7 +191,7 @@ primary_control_node=node1
 EOF
 
 # Extract first control plane node's IP for use as the primary control node
-first_control_ip=$(echo "$wireguard_ips" | jq -r 'to_entries | sort_by(.key) | .[0].value // empty')
+first_control_ip=$(echo "$node_ips" | jq -r 'to_entries | sort_by(.key) | .[0].value // empty')
 if [ -n "$first_control_ip" ]; then
     echo "primary_control_ip=${first_control_ip}" >> "$OUTPUT_FILE"
 fi
