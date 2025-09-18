@@ -29,7 +29,7 @@ SCRIPT_RETRY_DELAY=30  # seconds between full script retries
 # Individual host check settings (within a single script run)
 MAX_HOST_RETRIES=3     # Retries for a single host within one script attempt
 HOST_RETRY_DELAY=5     # seconds between checks for a single host
-SSH_CONNECT_TIMEOUT=10 # NEW: Increased SSH connection timeout (seconds)
+SSH_CONNECT_TIMEOUT=10 # SSH connection timeout (seconds)
 # --- End Configuration ---
 
 # Function to ping a host with retries (for a single host within a script run)
@@ -147,6 +147,21 @@ test_nodes() {
 
 
 # --- Main Script Logic with Global Retries ---
+echo -e "${GREEN}🔍 TFGrid K3s Cluster Connectivity Test${NC}"
+echo "========================================"
+echo ""
+
+# Check if WireGuard is active
+if ! sudo wg show k3s >/dev/null 2>&dev/null; then
+    echo -e "${RED}ERROR: WireGuard interface 'k3s' not found${NC}"
+    echo "Run './scripts/wg.sh' or 'make wg' first to set up WireGuard"
+    exit 1
+fi
+
+echo -e "${YELLOW}WireGuard interface status:${NC}"
+sudo wg show k3s
+echo ""
+
 script_attempt=1
 overall_success=0 # Flag to track if any attempt succeeded
 
@@ -215,11 +230,21 @@ done
 echo -e "\n${BLUE}====== Final Connectivity Check Result ======${NC}"
 if [ $overall_success -eq 1 ]; then
     echo -e "${GREEN}✓ ALL CHECKS PASSED (within $MAX_SCRIPT_RETRIES attempts).${NC}"
-    # The summary from the last successful attempt was already printed inside the loop.
+    echo ""
+    echo -e "${YELLOW}💡 Next Steps:${NC}"
+    echo "  • Run 'make platform' to deploy K3s cluster"
+    echo "  • Run 'make app' to deploy applications"
+    echo "  • Run 'make connect' to SSH into management node"
+    echo "  • Run 'make k9s' for cluster management TUI"
     exit 0
 else
     echo -e "${RED}✗ CHECK FAILED: Some nodes remained unreachable after $MAX_SCRIPT_RETRIES attempts.${NC}"
-    # Display the results from the very last attempt (which failed)
     echo "  (Final attempt status: $total_failed/$total_tested_this_run unreachable)"
+    echo ""
+    echo -e "${YELLOW}🔧 Troubleshooting:${NC}"
+    echo "  • Check WireGuard connection: make wg"
+    echo "  • Verify infrastructure deployment: make infrastructure"
+    echo "  • Regenerate inventory: make inventory"
+    echo "  • Check node addresses: make address"
     exit 1
 fi
