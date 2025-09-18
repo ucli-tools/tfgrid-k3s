@@ -49,7 +49,7 @@ if [ ! -f "$DEPLOYMENT_DIR/terraform.tfstate" ] && [ ! -f "$DEPLOYMENT_DIR/terra
     exit 1
 fi
 
-log_info "Generating inventory from Terraform outputs..."
+log_info "Generating inventory from Terraform outputs..." log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." echo "DEBUG: Script starting" log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." pwd log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." ls -la ../infrastructure/terraform.tfstate
 
 # Get Terraform outputs
 terraform_output=$(tofu -chdir="$DEPLOYMENT_DIR" show -json)
