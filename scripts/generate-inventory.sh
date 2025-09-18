@@ -49,7 +49,7 @@ if [ ! -f "$DEPLOYMENT_DIR/terraform.tfstate" ] && [ ! -f "$DEPLOYMENT_DIR/terra
     exit 1
 fi
 
-log_info "Generating inventory from Terraform outputs..." log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." echo "DEBUG: Script starting" log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." pwd log_info "Generating inventory from Terraform outputs..."log_info "Generating inventory from Terraform outputs..." ls -la ../infrastructure/terraform.tfstate
+log_info "Generating inventory from Terraform outputs..."
 
 # Get Terraform outputs
 terraform_output=$(tofu -chdir="$DEPLOYMENT_DIR" show -json)
@@ -72,11 +72,22 @@ if [ ! -f "$CREDENTIALS_FILE" ]; then
 fi
 
 # Parse control and worker node counts from credentials
-control_count=$(grep -oP 'control_nodes\s*=\s*\[\K[^\]]+' "$CREDENTIALS_FILE" | grep -o ',' | wc -l)
-control_count=$((control_count + 1))  # Add 1 for the first node
+# Parse control and worker node counts by counting actual numbers
+control_nodes_content=$(grep -oP 'control_nodes\s*=\s*\[\K[^\]]+' "$CREDENTIALS_FILE")
+if [ -n "$control_nodes_content" ]; then
+    # Remove spaces and count numbers separated by commas
+    control_count=$(echo "$control_nodes_content" | tr -d ' ' | tr ',' '\n' | grep -c '^[0-9]\+$')
+else
+    control_count=1  # Default to 1 if parsing fails
+fi
 
-worker_count=$(grep -oP 'worker_nodes\s*=\s*\[\K[^\]]+' "$CREDENTIALS_FILE" | grep -o ',' | wc -l)
-worker_count=$((worker_count + 1))  # Add 1 for the first node
+worker_nodes_content=$(grep -oP 'worker_nodes\s*=\s*\[\K[^\]]+' "$CREDENTIALS_FILE")
+if [ -n "$worker_nodes_content" ]; then
+    # Remove spaces and count numbers separated by commas
+    worker_count=$(echo "$worker_nodes_content" | tr -d ' ' | tr ',' '\n' | grep -c '^[0-9]\+$')
+else
+    worker_count=2  # Default to 2 if parsing fails
+fi
 
 log_info "Detected configuration: 1 management + $control_count control + $worker_count worker nodes"
 

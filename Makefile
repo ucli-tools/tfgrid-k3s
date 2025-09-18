@@ -18,7 +18,7 @@ infrastructure:
 # Generate Ansible inventory from Terraform outputs
 inventory:
 	@echo "📋 Generating Ansible inventory..."
-	@cd scripts && bash generate-inventory.sh
+	@./scripts/generate-inventory.sh
 
 # Show cluster node addresses and access information
 address:
