@@ -26,6 +26,12 @@ variable "worker_cpu" { type = number }
 variable "worker_mem" { type = number }
 variable "worker_disk" { type = number }
 
+variable "network_name" {
+  type        = string
+  default     = "k3s_cluster_net"
+  description = "Name of the network for the cluster"
+}
+
 variable "worker_public_ipv4" {
   type        = bool
   default     = true
@@ -80,7 +86,7 @@ resource "random_bytes" "mgmt_ip_seed" {
 
 # Mycelium overlay network
 resource "grid_network" "k3s_network" {
-  name          = "k3s_cluster_net"
+  name          = var.network_name
   nodes         = local.all_nodes
   ip_range      = "10.1.0.0/16"
   add_wg_access = true
