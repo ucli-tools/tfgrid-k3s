@@ -32,6 +32,12 @@ variable "network_name" {
   description = "Name of the network for the cluster"
 }
 
+variable "tfgrid_network" {
+  type        = string
+  default     = "main"
+  description = "ThreeFold Grid network (main or test)"
+}
+
 variable "worker_public_ipv4" {
   type        = bool
   default     = true
@@ -55,8 +61,8 @@ variable "management_disk" {
 
 provider "grid" {
   mnemonic  = var.mnemonic
-  network   = "main"
-  relay_url = "wss://relay.grid.tf"
+  network   = var.tfgrid_network
+  relay_url = var.tfgrid_network == "main" ? "wss://relay.grid.tf" : "wss://relay.test.grid.tf"
 }
 
 # Generate unique mycelium keys/seeds for all nodes
