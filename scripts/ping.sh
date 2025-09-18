@@ -4,8 +4,19 @@
 
 # Get script directory
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PLATFORM_DIR="$SCRIPT_DIR/../platform"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+PLATFORM_DIR="$PROJECT_ROOT/platform"
 INVENTORY_FILE="$PLATFORM_DIR/inventory.ini"
+
+# Load environment configuration
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+else
+    echo "Warning: .env file not found, using defaults"
+    MAIN_NETWORK="${MAIN_NETWORK:-wireguard}"
+fi
 
 # Check if inventory exists
 if [ ! -f "$INVENTORY_FILE" ]; then
@@ -149,18 +160,34 @@ test_nodes() {
 # --- Main Script Logic with Global Retries ---
 echo -e "${GREEN}🔍 TFGrid K3s Cluster Connectivity Test${NC}"
 echo "========================================"
+echo "Network: ${MAIN_NETWORK:-wireguard}"
 echo ""
 
-# Check if WireGuard is active
-if ! sudo wg show k3s >/dev/null 2>/dev/null; then
-    echo -e "${RED}ERROR: WireGuard interface 'k3s' not found${NC}"
-    echo "Run './scripts/wg.sh' or 'make wg' first to set up WireGuard"
-    exit 1
-fi
+# Check network connectivity based on MAIN_NETWORK setting
+case "${MAIN_NETWORK:-wireguard}" in
+    "wireguard")
+        # Check if WireGuard is active
+        if ! sudo wg show k3s >/dev/null 2>/dev/null; then
+            echo -e "${RED}ERROR: WireGuard interface 'k3s' not found${NC}"
+            echo "Run './scripts/wg.sh' or 'make wg' first to set up WireGuard"
+            exit 1
+        fi
 
-echo -e "${YELLOW}WireGuard interface status:${NC}"
-sudo wg show k3s
-echo ""
+        echo -e "${YELLOW}WireGuard interface status:${NC}"
+        sudo wg show k3s
+        echo ""
+        ;;
+    "mycelium")
+        # For Mycelium, we don't need to check a specific interface
+        # The mycelium network is decentralized and IPs are accessible directly
+        echo -e "${YELLOW}Using Mycelium network for connectivity checks${NC}"
+        echo ""
+        ;;
+    *)
+        echo -e "${RED}ERROR: Invalid MAIN_NETWORK: ${MAIN_NETWORK}. Use 'wireguard' or 'mycelium'${NC}"
+        exit 1
+        ;;
+esac
 
 script_attempt=1
 overall_success=0 # Flag to track if any attempt succeeded
@@ -242,7 +269,14 @@ else
     echo "  (Final attempt status: $total_failed/$total_tested_this_run unreachable)"
     echo ""
     echo -e "${YELLOW}🔧 Troubleshooting:${NC}"
-    echo "  • Check WireGuard connection: make wg"
+    case "${MAIN_NETWORK:-wireguard}" in
+        "wireguard")
+            echo "  • Check WireGuard connection: make wg"
+            ;;
+        "mycelium")
+            echo "  • Verify Mycelium network is running on nodes"
+            ;;
+    esac
     echo "  • Verify infrastructure deployment: make infrastructure"
     echo "  • Regenerate inventory: make inventory"
     echo "  • Check node addresses: make address"
