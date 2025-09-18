@@ -1,7 +1,15 @@
-.PHONY: all infrastructure inventory platform app clean wg dns ping help permissions connect
+.PHONY: all deploy quick infrastructure inventory platform app clean wg dns ping help permissions connect
 
-# Default target
-all: infrastructure platform app
+# Default target - complete deployment
+all: deploy
+
+# Main deployment workflow
+deploy: infrastructure inventory wg platform app
+	@echo "🎉 K3s cluster deployment completed successfully!"
+
+# Quick redeployment (assumes infrastructure exists)
+quick: inventory wg platform app
+	@echo "⚡ Quick K3s redeployment completed!"
 
 # Deploy infrastructure only (ThreeFold Grid VMs)
 infrastructure:
@@ -62,6 +70,8 @@ help:
 	@echo ""
 	@echo "🎯 Main Commands:"
 	@echo "  make all            - Complete K3s cluster deployment (default)"
+	@echo "  make deploy         - Deploy complete K3s cluster to ThreeFold Grid"
+	@echo "  make quick          - Quick redeployment (assumes infrastructure exists)"
 	@echo "  make infrastructure - Deploy ThreeFold Grid infrastructure only"
 	@echo "  make inventory      - Generate Ansible inventory from infrastructure"
 	@echo "  make wg             - Setup WireGuard connection to cluster"
@@ -81,7 +91,7 @@ help:
 	@echo "  1. Copy infrastructure/credentials.auto.tfvars.example to infrastructure/credentials.auto.tfvars"
 	@echo "  2. Edit infrastructure/credentials.auto.tfvars with your node IDs"
 	@echo "  3. Set TF_VAR_mnemonic environment variable with your ThreeFold mnemonic"
-	@echo "  4. Run: make all"
+	@echo "  4. Run: make deploy"
 	@echo ""
 	@echo "🌐 Environment Variables:"
 	@echo "  TF_VAR_mnemonic     - ThreeFold mnemonic (required)"
@@ -89,7 +99,10 @@ help:
 	@echo ""
 	@echo "🎯 Quick Start:"
 	@echo "  export TF_VAR_mnemonic=\"your twelve word mnemonic here\""
-	@echo "  make all"
+	@echo "  make deploy"
+	@echo ""
+	@echo "📋 For existing infrastructure:"
+	@echo "  make quick"
 	@echo ""
 	@echo "📊 Cluster Architecture:"
 	@echo "  • 1 Management Node (monitoring, tools)"
