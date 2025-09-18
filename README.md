@@ -87,6 +87,7 @@ The management node lives within the same private network as your cluster nodes,
 
    # Choose network for Ansible connectivity (wireguard or mycelium)
    # Edit .env file to set MAIN_NETWORK=wireguard or MAIN_NETWORK=mycelium
+   # This setting also affects make connect, make ping, and make k9s commands
    nano .env
    ```
 
@@ -129,13 +130,13 @@ The management node is your central location for all cluster operations. After d
 ### Connecting to the Management Node
 
 ```bash
-# Connect to the management node
+# Connect to the management node (uses network configured in .env)
 make connect
 
 # Or directly:
 ssh root@<management-node-ip>
 
-# Connect to the management node and launch K9s TUI directly
+# Connect to the management node and launch K9s TUI directly (uses configured network)
 make k9s
 ```
 
@@ -175,13 +176,13 @@ The management node has all necessary tools pre-installed:
 # Show cluster node addresses and access information
 make address
 
-# Check connectivity to all nodes
+# Check connectivity to all nodes (uses configured network)
 make ping
 
-# Connect to the management node
+# Connect to the management node (uses configured network)
 make connect
 
-# Connect to management node and launch K9s TUI
+# Connect to management node and launch K9s TUI (uses configured network)
 make k9s
 
 # Verify cluster permissions
@@ -193,6 +194,8 @@ make dns
 # Clean up deployment resources
 make clean
 ```
+
+**Note**: `make connect`, `make ping`, and `make k9s` automatically use the network configured in your `.env` file (`MAIN_NETWORK` setting).
 
 Run `make help` for a complete list of available commands.
 
@@ -272,7 +275,7 @@ The deployment supports two network options for Ansible connectivity:
 
 ### Switching Networks
 
-To change the network used for Ansible connectivity:
+To change the network used for Ansible connectivity and management commands:
 
 1. Edit your `.env` file:
    ```bash
@@ -293,7 +296,13 @@ To change the network used for Ansible connectivity:
    make platform
    ```
 
-Both networks are always available on all nodes, so you can switch between them if one has connectivity issues.
+**Important**: After switching networks, all management commands automatically use the configured network:
+
+- `make connect` - Connects to management node via the configured network
+- `make ping` - Tests connectivity using the configured network's IPs
+- `make k9s` - Connects and launches K9s via the configured network
+
+Both networks are always available on all nodes, so you can switch between them if one has connectivity issues. The system will automatically use the appropriate IP addresses and connection methods based on your `MAIN_NETWORK` setting.
 
 ## Maintenance and Updates
 
