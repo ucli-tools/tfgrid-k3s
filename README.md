@@ -75,6 +75,16 @@ The management node lives within the same private network as your cluster nodes,
 
    > **Tip**: Run `make help` to see all available make commands
 
+3. Configure network connectivity (optional):
+   ```bash
+   # Copy environment configuration
+   cp .env.example .env
+
+   # Choose network for Ansible connectivity (wireguard or mycelium)
+   # Edit .env file to set MAIN_NETWORK=wireguard or MAIN_NETWORK=mycelium
+   nano .env
+   ```
+
 4. After deployment, for security, unset the sensitive environment variable:
    ```bash
    unset TF_VAR_mnemonic
@@ -224,6 +234,47 @@ worker_cpu = 8
 worker_mem = 16384   # 16GB RAM
 worker_disk = 250    # 250GB storage
 ```
+
+## Network Configuration
+
+The deployment supports two network options for Ansible connectivity:
+
+### WireGuard (Default)
+- **Type**: Private overlay network
+- **IP Addresses**: IPv4 (10.x.x.x range)
+- **Security**: Encrypted VPN connections
+- **Use Case**: Most reliable for production deployments
+
+### Mycelium
+- **Type**: Decentralized IPv6 overlay network
+- **IP Addresses**: IPv6 addresses
+- **Security**: Built-in encryption
+- **Use Case**: Alternative when WireGuard has issues
+
+### Switching Networks
+
+To change the network used for Ansible connectivity:
+
+1. Edit your `.env` file:
+   ```bash
+   # For WireGuard (default)
+   MAIN_NETWORK=wireguard
+
+   # For Mycelium
+   MAIN_NETWORK=mycelium
+   ```
+
+2. Regenerate the inventory:
+   ```bash
+   make inventory
+   ```
+
+3. Re-run the platform deployment:
+   ```bash
+   make platform
+   ```
+
+Both networks are always available on all nodes, so you can switch between them if one has connectivity issues.
 
 ## Maintenance and Updates
 
