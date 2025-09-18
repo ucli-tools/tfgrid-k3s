@@ -39,11 +39,11 @@ ping_host() {
     local name=$3
     local host_retries=0 # Using a local counter for clarity
 
-    echo -n "  Checking $name (${user}@${ip})... " # Slightly clearer message
+    echo -n "  Checking $name (${ip})... " # Slightly clearer message
 
     while [ $host_retries -lt $MAX_HOST_RETRIES ]; do # Use MAX_HOST_RETRIES
-        # Use the configured SSH_CONNECT_TIMEOUT
-        if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=$SSH_CONNECT_TIMEOUT "${user}@${ip}" "echo 'Success'" &>/dev/null; then
+        # Use ping with timeout
+        if ping -c 1 -W 5 "$ip" >/dev/null 2>&1; then
             echo -e "${GREEN}Success!${NC}"
             return 0 # Host reachable
         else
@@ -55,7 +55,7 @@ ping_host() {
                 echo -n "  Retrying $name in $HOST_RETRY_DELAY seconds... " # Use HOST_RETRY_DELAY
                 sleep $HOST_RETRY_DELAY
                 # Re-print the initial check line for clarity on retry
-                echo -n "  Checking $name (${user}@${ip})... "
+                echo -n "  Checking $name (${ip})... "
             else
                 # Failed all host-level retries for *this* script run
                 echo -e "${RED}Failed after $MAX_HOST_RETRIES attempts!${NC}" # Use MAX_HOST_RETRIES
@@ -152,7 +152,7 @@ echo "========================================"
 echo ""
 
 # Check if WireGuard is active
-if ! sudo wg show k3s >/dev/null 2>&dev/null; then
+if ! sudo wg show k3s >/dev/null 2>/dev/null; then
     echo -e "${RED}ERROR: WireGuard interface 'k3s' not found${NC}"
     echo "Run './scripts/wg.sh' or 'make wg' first to set up WireGuard"
     exit 1
