@@ -28,6 +28,36 @@ The deployment consists of:
 
 The management node lives within the same private network as your cluster nodes, providing secure management without exposing your cluster to the public internet.
 
+## Kubernetes Components
+
+The K3s cluster is deployed with the following components for full functionality:
+
+### Core Components
+- **K3s**: Lightweight Kubernetes distribution with built-in components disabled (Traefik, ServiceLB)
+- **Flannel**: CNI plugin for pod networking using VXLAN backend
+
+### Load Balancing & Ingress
+- **MetalLB**: Load balancer for Kubernetes services, providing external IP addresses
+- **Nginx Ingress Controller**: Ingress controller for routing external traffic to services
+
+### Networking Configuration
+
+The cluster automatically adapts its networking based on your `MAIN_NETWORK` setting:
+
+#### WireGuard Network (IPv4)
+- **K3s Configuration**: Standard IPv4 networking
+- **MetalLB**: Configures IPv4 address pools (`/32` subnets)
+- **Nginx Ingress**: Uses IPv4-compatible deployment manifest
+- **IP Addresses**: 10.x.x.x range for cluster communication
+
+#### Mycelium Network (IPv6)
+- **K3s Configuration**: Dual-stack IPv4/IPv6 networking enabled
+- **MetalLB**: Configures IPv6 address pools (`/128` subnets)
+- **Nginx Ingress**: Modified deployment manifest with IPv6 support
+- **IP Addresses**: IPv6 addresses for cluster communication
+
+This ensures Nginx and all cluster services work correctly regardless of your chosen network type.
+
 ## Prerequisites
 
 - Linux/macOS system with bash
@@ -259,42 +289,44 @@ worker_disk = 250    # 250GB storage
 
 ## Network Configuration
 
-The deployment supports two network options for Ansible connectivity:
+The deployment supports two network options for Ansible connectivity. Your choice affects not just connectivity, but also how the Kubernetes cluster components (K3s, MetalLB, Nginx) are configured:
 
-### WireGuard (Default)
+### WireGuard (Default, IPv4)
 - **Type**: Private overlay network
 - **IP Addresses**: IPv4 (10.x.x.x range)
 - **Security**: Encrypted VPN connections
 - **Use Case**: Most reliable for production deployments
+- **Cluster Impact**: Standard IPv4-only Kubernetes networking
 
-### Mycelium
+### Mycelium (IPv6)
 - **Type**: Decentralized IPv6 overlay network
 - **IP Addresses**: IPv6 addresses
 - **Security**: Built-in encryption
 - **Use Case**: Alternative when WireGuard has issues
+- **Cluster Impact**: Dual-stack IPv4/IPv6 Kubernetes networking with IPv6-optimized components
 
 ### Switching Networks
 
 To change the network used for Ansible connectivity and management commands:
 
 1. Edit your `.env` file:
-   ```bash
-   # For WireGuard (default)
-   MAIN_NETWORK=wireguard
+    ```bash
+    # For WireGuard (default)
+    MAIN_NETWORK=wireguard
 
-   # For Mycelium
-   MAIN_NETWORK=mycelium
-   ```
+    # For Mycelium
+    MAIN_NETWORK=mycelium
+    ```
 
 2. Regenerate the inventory:
-   ```bash
-   make inventory
-   ```
+    ```bash
+    make inventory
+    ```
 
 3. Re-run the platform deployment:
-   ```bash
-   make platform
-   ```
+    ```bash
+    make platform
+    ```
 
 **Important**: After switching networks, all management commands automatically use the configured network:
 
@@ -302,7 +334,7 @@ To change the network used for Ansible connectivity and management commands:
 - `make ping` - Tests connectivity using the configured network's IPs
 - `make k9s` - Connects and launches K9s via the configured network
 
-Both networks are always available on all nodes, so you can switch between them if one has connectivity issues. The system will automatically use the appropriate IP addresses and connection methods based on your `MAIN_NETWORK` setting.
+Both networks are always available on all nodes, so you can switch between them if one has connectivity issues. The system will automatically configure K3s, MetalLB, and Nginx appropriately based on your `MAIN_NETWORK` setting.
 
 ## Maintenance and Updates
 
