@@ -1,4 +1,4 @@
-.PHONY: all deploy quick infrastructure inventory platform app clean wg dns ping help permissions connect
+.PHONY: all deploy quick infrastructure inventory platform app clean wg dns ping ready help permissions connect
 
 # Default target - complete deployment
 all: deploy
@@ -57,6 +57,11 @@ dns:
 ping:
 	cd scripts && bash ping.sh
 
+# Check SSH readiness of all nodes
+ready:
+	@echo "🔧 Checking SSH readiness of all cluster nodes..."
+	@cd scripts && bash ready.sh
+
 # Check cluster permissions
 permissions:
 	@echo "Checking cluster permissions..."
@@ -82,6 +87,7 @@ help:
 	@echo "🔧 Development & Testing Commands:"
 	@echo "  make address        - Show cluster node addresses and access info"
 	@echo "  make ping           - Test connectivity to all cluster nodes"
+	@echo "  make ready          - Check SSH readiness of all cluster nodes"
 	@echo "  make connect        - SSH into the management node"
 	@echo "  make k9s            - Connect to management node and open K9s TUI"
 	@echo "  make permissions    - Check cluster permissions"

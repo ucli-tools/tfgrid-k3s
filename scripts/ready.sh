@@ -14,16 +14,17 @@ if [ ! -f "/etc/wireguard/k3s.conf" ]; then
   exit 1
 fi
 
-# Get management node WireGuard IP
-MGMT_HOST=$(grep "mgmt_host ansible_host" "${PLATFORM_DIR}/inventory.ini" | awk '{print $2}' | cut -d= -f2)
-if [ -z "$MGMT_HOST" ]; then
-  echo "Error: Could not retrieve management node IP from inventory."
+# Check if inventory exists
+if [ ! -f "${PLATFORM_DIR}/inventory.ini" ]; then
+  echo "⚠️ Ansible inventory not found!"
+  echo "Inventory must be generated first. Run:"
+  echo "  make inventory"
   exit 1
 fi
 
-# --- Wait for SSH Availability ---
-echo "=== Waiting for SSH Availability ==="
-echo "Checking SSH connectivity to all cluster nodes..."
+# --- Check SSH Availability ---
+echo "=== Checking SSH Availability ==="
+echo "Verifying SSH connectivity to all cluster nodes..."
 
 # SSH check configuration
 SSH_CHECK_TIMEOUT=10      # seconds to wait for SSH connection
@@ -93,7 +94,13 @@ check_all_ssh() {
 ssh_attempt=1
 while [ $ssh_attempt -le $MAX_SSH_RETRIES ]; do
   if check_all_ssh $ssh_attempt; then
-    break
+    echo ""
+    echo "=== SSH Readiness Check Completed Successfully! ==="
+    echo "All cluster nodes are accessible via SSH."
+    echo ""
+    echo "You can now proceed with platform deployment:"
+    echo "  make platform"
+    exit 0
   fi
 
   if [ $ssh_attempt -lt $MAX_SSH_RETRIES ]; then
@@ -104,45 +111,12 @@ while [ $ssh_attempt -le $MAX_SSH_RETRIES ]; do
   ssh_attempt=$((ssh_attempt + 1))
 done
 
-if [ $ssh_attempt -gt $MAX_SSH_RETRIES ]; then
-  echo "❌ Failed to establish SSH connectivity to all nodes after $MAX_SSH_RETRIES attempts"
-  echo "This may indicate infrastructure deployment issues."
-  exit 1
-fi
-
 echo ""
-
-# --- Configure Management Node ---
-echo "=== Configuring Management Node ==="
-echo "Installing required software and copying deployment files..."
-cd "${PLATFORM_DIR}" || exit 1
-if ! ansible-playbook site.yml -t management; then
-  echo "Management node configuration failed!"
-  exit 1
-fi
-
-# --- Deploy K3s Cluster ---
-echo "=== Deploying K3s Cluster ==="
-echo "Running deployment for all components..."
-
-# Deploy K3s cluster using a single Ansible command
-# This avoids the direct SSH approach that was failing
-if ! ansible-playbook site.yml -t common,control,worker,kubeconfig; then
-  echo "K3s deployment failed!"
-  exit 1
-fi
-
-# Wait for K3s to stabilize
-echo "Waiting for K3s cluster to stabilize (60 seconds)..."
-sleep 60
-
-echo "=== K3s Platform Deployment Completed Successfully! ==="
+echo "❌ Failed to establish SSH connectivity to all nodes after $MAX_SSH_RETRIES attempts"
+echo "This may indicate infrastructure deployment issues."
 echo ""
-echo "Your K3s cluster is now running and managed by the management node at: $MGMT_HOST"
-echo ""
-echo "To deploy applications on your cluster:"
-echo "  make app"
-echo ""
-echo "To connect to the management node:"
-echo "  make connect-management"
-echo "  or: ssh root@$MGMT_HOST"
+echo "Troubleshooting steps:"
+echo "  • Check WireGuard connection: make wg"
+echo "  • Verify infrastructure status: make address"
+echo "  • Test basic connectivity: make ping"
+exit 1
