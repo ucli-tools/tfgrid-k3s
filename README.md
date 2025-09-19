@@ -58,6 +58,8 @@ The cluster automatically adapts its networking based on your `MAIN_NETWORK` set
 
 This ensures Nginx and all cluster services work correctly regardless of your chosen network type.
 
+> Note: The code is tested and fully functional with WireGuard. There might be issues with Mycelium until it is fully tested. This documentation will be updated when this happens.
+
 ## Prerequisites
 
 - Linux/macOS system with bash
