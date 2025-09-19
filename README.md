@@ -142,6 +142,7 @@ Runs `scripts/infrastructure.sh`, which:
 ### 2. Platform Deployment (`make platform`)
 
 Runs `scripts/platform.sh`, which:
+- **Automatically waits for SSH availability** on all nodes before proceeding (eliminates timing issues)
 - Configures the management node with required tools (Ansible, kubectl, Helm)
 - Deploys the K3s control plane on the `k3s_control` nodes
 - Joins worker nodes to the cluster
@@ -208,6 +209,9 @@ make address
 
 # Check connectivity to all nodes (uses configured network)
 make ping
+
+# Check SSH readiness of all cluster nodes
+make ready
 
 # Connect to the management node (uses configured network)
 make connect
